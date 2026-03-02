@@ -1,0 +1,11 @@
+id,type,string_id,height,depth
+1,TreeNode,1,3,0
+2,TreeNode,1.1,2,1
+5,TreeNode,1.1.1,1,2
+8,TreeNode,1.1.1.1,0,3
+9,TreeNode,1.1.1.2,0,3
+6,TreeNode,1.1.2,0,2
+7,TreeNode,1.1.3,0,2
+3,TreeNode,1.2,0,1
+4,TreeNode,1.3,1,1
+10,TreeNode,1.3.1,0,2
