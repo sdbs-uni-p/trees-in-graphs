@@ -1,0 +1,21 @@
+               name               |  table   |      id1      |      id2
+----------------------------------+----------+---------------+---------------
+ artificial_forests_40            | TreeNode |             4 |             7
+ artificial_trees_truebase_10     | TreeNode |             2 |             8
+ artificial_trees_truebase_100    | TreeNode |             3 |            86
+ artificial_trees_truebase_1000   | TreeNode |             3 |           901
+ artificial_trees_truebase_10000  | TreeNode |             4 |          8065
+ artificial_trees_ultratall_10    | TreeNode |             2 |             9
+ artificial_trees_ultratall_100   | TreeNode |             2 |            48
+ artificial_trees_ultratall_1000  | TreeNode |             2 |           961
+ artificial_trees_ultratall_10000 | TreeNode |             4 |          7043
+ artificial_trees_ultrawide_10    | TreeNode |             2 |             8
+ artificial_trees_ultrawide_100   | TreeNode |             4 |            60
+ artificial_trees_ultrawide_1000  | TreeNode |             4 |           867
+ artificial_trees_ultrawide_10000 | TreeNode |             2 |          8782
+ s_all_comment                    | Comment  |  549757114012 |  549757114029
+ s_all_place                      | Place    |          1455 |           548
+ s_all_tagclass                   | Tagclass |           240 |            47
+ sf1                              | Comment  |  549757114012 |  549757114029
+ sf2                              | Place    |          1455 |           548
+ sf3                              | Tagclass |           240 |            47

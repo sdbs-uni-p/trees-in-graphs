@@ -1,0 +1,18 @@
+{
+  "artificial_forest_40": {"id1": 4, "id2": 7},
+  "truebase_10":          {"id1": 2, "id2": 8},
+  "truebase_100":         {"id1": 3, "id2": 86},
+  "truebase_1000":        {"id1": 3, "id2": 901},
+  "truebase_10000":       {"id1": 4, "id2": 8065},
+  "ultratall_10":         {"id1": 2, "id2": 9},
+  "ultratall_100":        {"id1": 2, "id2": 48},
+  "ultratall_1000":       {"id1": 2, "id2": 961},
+  "ultratall_10000":      {"id1": 4, "id2": 7043},
+  "ultrawide_10":         {"id1": 2, "id2": 8},
+  "ultrawide_100":        {"id1": 4, "id2": 60},
+  "ultrawide_1000":       {"id1": 4, "id2": 867},
+  "ultrawide_10000":      {"id1": 2, "id2": 8782},
+  "sf1":                  {"id1": 549757114012, "id2": 549757114029},
+  "sf2":                  {"id1": 1455,         "id2": 548},
+  "sf3":                  {"id1": 240,           "id2": 47}
+}
