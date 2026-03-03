@@ -1,0 +1,14 @@
+Nested Loop  (cost=0.00..456670.28 rows=4235364 width=1) (actual time=511.410..2938.212 rows=1 loops=1)
+  ->  Seq Scan on "Comment" n1  (cost=0.00..180684.72 rows=2058 width=8) (actual time=511.106..1472.679 rows=1 loops=1)
+        Filter: (properties @> (format('{"__id__": %s}'::text, '549757114012'::bigint))::agtype)
+        Rows Removed by Filter: 2052168
+  ->  Materialize  (cost=0.00..180695.01 rows=2058 width=8) (actual time=0.299..1465.526 rows=1 loops=1)
+        ->  Seq Scan on "Comment" n2  (cost=0.00..180684.72 rows=2058 width=8) (actual time=0.294..1465.520 rows=1 loops=1)
+              Filter: (properties @> (format('{"__id__": %s}'::text, '549757114029'::bigint))::agtype)
+              Rows Removed by Filter: 2052168
+Planning Time: 0.839 ms
+JIT:
+  Functions: 9
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+  Timing: Generation 0.478 ms, Inlining 0.000 ms, Optimization 0.263 ms, Emission 5.947 ms, Total 6.688 ms
+Execution Time: 2961.757 ms

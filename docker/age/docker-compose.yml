@@ -1,0 +1,31 @@
+services:
+  age_treebench:
+    build: .
+    container_name: age_treebench
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      INIT_ROOT: /opt/age-init
+      DATA_PATHS: /data/prepared/artificial_forests/* /data/prepared/artificial_trees/*/10 /data/prepared/artificial_trees/*/100 /data/prepared/artificial_trees/*/1000 /data/prepared/artificial_trees/*/10000 /data/prepared/snb/sf1
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=age,pg_stat_statements,auto_explain,pg_hint_plan
+    volumes:
+      - age_treebench_data:/var/lib/postgresql/data
+      - ../../data:/data:rw
+      - ./init:/opt/age-init:ro
+      - ../../experiments/age:/experiments:rw
+      - ../../queries/age:/queries:rw
+      - ../../results:/results:rw
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /var/lib/postgresql/data/pgdata/.init_complete && pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h 127.0.0.1 -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  age_treebench_data:

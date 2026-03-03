@@ -1,0 +1,11 @@
+Hash Join  (cost=4.43..8.52 rows=1 width=21) (actual time=0.234..0.266 rows=3 loops=1)
+  Hash Cond: (c.depth = (root_alias.depth + 1))
+  Join Filter: (c.dewey ~~ (root_alias.dewey || '.%'::text))
+  ->  Seq Scan on "Tagclass" c  (cost=0.00..3.71 rows=71 width=130) (actual time=0.010..0.022 rows=71 loops=1)
+  ->  Hash  (cost=4.42..4.42 rows=1 width=13) (actual time=0.185..0.186 rows=1 loops=1)
+        Buckets: 1024  Batches: 1  Memory Usage: 9kB
+        ->  Seq Scan on "Tagclass" root_alias  (cost=0.00..4.42 rows=1 width=13) (actual time=0.020..0.179 rows=1 loops=1)
+              Filter: (properties @> (format('{"__id__": %s}'::text, 1))::agtype)
+              Rows Removed by Filter: 70
+Planning Time: 1.635 ms
+Execution Time: 0.414 ms

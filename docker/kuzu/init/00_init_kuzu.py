@@ -60,6 +60,11 @@ ARTIFICIAL_TREE_TYPES = ["truebase", "ultratall", "ultrawide"]
 ARTIFICIAL_TREE_SIZES = [10, 100, 1000, 10000, 100000]
 ANNOTATION_TYPES = ["plain", "dewey", "prepost"]
 
+
+def tree_nodes_filename(annotation: str) -> str:
+    """Return the tree node CSV filename for a given annotation."""
+    return "TreeNode.csv" if annotation == "plain" else f"TreeNode_{annotation}.csv"
+
 # ─── sf1 (full LDBC SNB) constants ──────────────────────────────────────────
 
 # Labels that carry tree-annotation columns (dewey/prepost)
@@ -116,13 +121,13 @@ S_ALL_TREE_NODE_SCHEMAS = {
 
 # Source CSV filename for each (tree-label, annotation) combination
 S_ALL_TREE_NODE_FILES = {
-    ("Comment","plain"):   "comment_0_0_plain.csv",
+    ("Comment","plain"):   "comment_0_0.csv",
     ("Comment","dewey"):   "comment_0_0_dewey.csv",
     ("Comment","prepost"): "comment_0_0_prepost.csv",
-    ("Place","plain"):     "place_0_0_plain.csv",
+    ("Place","plain"):     "place_0_0.csv",
     ("Place","dewey"):     "place_0_0_dewey.csv",
     ("Place","prepost"):   "place_0_0_prepost.csv",
-    ("Tagclass","plain"):  "tagclass_0_0_plain.csv",
+    ("Tagclass","plain"):  "tagclass_0_0.csv",
     ("Tagclass","dewey"):  "tagclass_0_0_dewey.csv",
     ("Tagclass","prepost"):"tagclass_0_0_prepost.csv",
 }
@@ -177,7 +182,7 @@ def build_dataset_list():
                     tree_type,
                     str(size),
                     "nodes",
-                    f"TreeNodes_{annotation}.csv",
+                    tree_nodes_filename(annotation),
                 )
                 edge_csv = os.path.join(
                     DATA_DIR,
@@ -185,7 +190,7 @@ def build_dataset_list():
                     tree_type,
                     str(size),
                     "edges",
-                    "TreeEdges.csv",
+                    "TreeEdge.csv",
                 )
                 datasets.append(
                     {
@@ -207,14 +212,14 @@ def build_dataset_list():
                 "artificial_forests",
                 f"{forest_size}",
                 "nodes",
-                f"TreeNodes_{annotation}.csv",
+                tree_nodes_filename(annotation),
             )
             edge_csv = os.path.join(
                 DATA_DIR,
                 "artificial_forests",
                 f"{forest_size}",
                 "edges",
-                "TreeEdges.csv",
+                "TreeEdge.csv",
             )
             datasets.append(
                 {
@@ -230,7 +235,8 @@ def build_dataset_list():
     # SNB s1
     for annotation in ANNOTATION_TYPES:
         graph_name = f"s1_{annotation}"
-        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", f"comment_0_0_{annotation}.csv")
+        node_file = "comment_0_0.csv" if annotation == "plain" else f"comment_0_0_{annotation}.csv"
+        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", node_file)
         edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "comment_replyOf_comment_0_0.csv")
         datasets.append(
             {
@@ -246,7 +252,8 @@ def build_dataset_list():
     # SNB s2 — Place nodes
     for annotation in ANNOTATION_TYPES:
         graph_name = f"s2_{annotation}"
-        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", f"place_0_0_{annotation}.csv")
+        node_file = "place_0_0.csv" if annotation == "plain" else f"place_0_0_{annotation}.csv"
+        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", node_file)
         edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "place_isPartOf_place_0_0.csv")
         datasets.append(
             {
@@ -262,7 +269,8 @@ def build_dataset_list():
     # SNB s3 — Tagclass nodes
     for annotation in ANNOTATION_TYPES:
         graph_name = f"s3_{annotation}"
-        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", f"tagclass_0_0_{annotation}.csv")
+        node_file = "tagclass_0_0.csv" if annotation == "plain" else f"tagclass_0_0_{annotation}.csv"
+        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", node_file)
         edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "tagclass_isSubclassOf_tagclass_0_0.csv")
         datasets.append(
             {

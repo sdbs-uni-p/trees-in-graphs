@@ -1,0 +1,5 @@
+{"id": 844424930131978, "label": "TreeNode", "properties": {"id": "10", "type": "TreeNode", "__id__": 10}}::vertex
+{"id": 844424930131977, "label": "TreeNode", "properties": {"id": "9", "type": "TreeNode", "__id__": 9}}::vertex
+{"id": 844424930131976, "label": "TreeNode", "properties": {"id": "8", "type": "TreeNode", "__id__": 8}}::vertex
+{"id": 844424930131975, "label": "TreeNode", "properties": {"id": "7", "type": "TreeNode", "__id__": 7}}::vertex
+{"id": 844424930131971, "label": "TreeNode", "properties": {"id": "3", "type": "TreeNode", "__id__": 3}}::vertex

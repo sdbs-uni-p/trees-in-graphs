@@ -1,0 +1,9 @@
+Nested Loop  (cost=0.00..193.75 rows=7 width=19) (actual time=0.117..3.310 rows=748 loops=1)
+  Join Filter: (c.dewey ~~ (root_alias.dewey || '.%'::text))
+  Rows Removed by Join Filter: 712
+  ->  Seq Scan on "Place" root_alias  (cost=0.00..93.20 rows=1 width=7) (actual time=0.084..2.153 rows=1 loops=1)
+        Filter: (properties @> (format('{"__id__": %s}'::text, 1455))::agtype)
+        Rows Removed by Filter: 1459
+  ->  Seq Scan on "Place" c  (cost=0.00..78.60 rows=1460 width=142) (actual time=0.019..0.330 rows=1460 loops=1)
+Planning Time: 1.360 ms
+Execution Time: 3.523 ms
