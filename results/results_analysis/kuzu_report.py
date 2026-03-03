@@ -54,9 +54,9 @@ Y_AXIS_LABELS = {
     "s_all_comment":           "SNB1 (Comment) (Full Graph)",
     "s_all_place":             "SNB2 (Place) (Full Graph)",
     "s_all_tagclass":          "SNB3 (Tagclass) (Full Graph)",
-    "sf1":                     "SNB1 (Comment) (Comment Nodes Only)",
-    "sf2":                     "SNB2 (Place) (Place Nodes Only)",
-    "sf3":                     "SNB3 (Tagclass) (Tagclass Nodes Only)",
+    "s1":                     "SNB1 (Comment) (Comment Nodes Only)",
+    "s2":                     "SNB2 (Place) (Place Nodes Only)",
+    "s3":                     "SNB3 (Tagclass) (Tagclass Nodes Only)",
 }
 
 QUERY_LABELS = {

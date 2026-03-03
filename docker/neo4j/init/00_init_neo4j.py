@@ -58,7 +58,7 @@ ARTIFICIAL_TREE_TYPES = ["truebase", "ultratall", "ultrawide"]
 ARTIFICIAL_TREE_SIZES = [10, 100, 1000, 10000, 100000]
 ANNOTATION_TYPES = ["plain", "dewey", "prepost"]
 
-# ─── s_all (full LDBC SNB) constants ──────────────────────────────────────────
+# ─── sf1 (full LDBC SNB) constants ──────────────────────────────────────────
 
 # Labels that carry tree-annotation columns (dewey/prepost)
 TREE_ANNOTATED_LABELS = {"Comment", "Place", "Tagclass"}
@@ -90,7 +90,7 @@ NON_TREE_NODE_FILES = {
     "Tag":          "tag_0_0.csv",
 }
 
-# Tree-annotated node props for s_all, keyed by (label, annotation)
+# Tree-annotated node props for sf1, keyed by (label, annotation)
 S_ALL_TREE_NODE_PROPS = {
     ("Comment","plain"):   [("id","toInteger"),("creationDate",None),("locationIP",None),
                              ("browserUsed",None),("content",None),("length","toInteger")],
@@ -235,11 +235,11 @@ def build_dataset_list():
                 "annotation": annotation,
             })
 
-    # SNB sf1
+    # SNB s1
     for annotation in ANNOTATION_TYPES:
-        graph_name = f"sf1_{annotation}"
-        node_csv = os.path.join(DATA_DIR, "snb", "s_all", "nodes", f"comment_0_0_{annotation}.csv")
-        edge_csv = os.path.join(DATA_DIR, "snb", "s_all", "edges", "comment_replyOf_comment_0_0.csv")
+        graph_name = f"s1_{annotation}"
+        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", f"comment_0_0_{annotation}.csv")
+        edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "comment_replyOf_comment_0_0.csv")
         datasets.append({
             "graph_name": graph_name,
             "node_label": "Comment",
@@ -249,11 +249,11 @@ def build_dataset_list():
             "annotation": annotation,
         })
 
-    # SNB sf2 — Place nodes
+    # SNB s2 — Place nodes
     for annotation in ANNOTATION_TYPES:
-        graph_name = f"sf2_{annotation}"
-        node_csv = os.path.join(DATA_DIR, "snb", "s_all", "nodes", f"place_0_0_{annotation}.csv")
-        edge_csv = os.path.join(DATA_DIR, "snb", "s_all", "edges", "place_isPartOf_place_0_0.csv")
+        graph_name = f"s2_{annotation}"
+        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", f"place_0_0_{annotation}.csv")
+        edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "place_isPartOf_place_0_0.csv")
         datasets.append({
             "graph_name": graph_name,
             "node_label": "Place",
@@ -263,11 +263,11 @@ def build_dataset_list():
             "annotation": annotation,
         })
 
-    # SNB sf3 — Tagclass nodes
+    # SNB s3 — Tagclass nodes
     for annotation in ANNOTATION_TYPES:
-        graph_name = f"sf3_{annotation}"
-        node_csv = os.path.join(DATA_DIR, "snb", "s_all", "nodes", f"tagclass_0_0_{annotation}.csv")
-        edge_csv = os.path.join(DATA_DIR, "snb", "s_all", "edges", "tagclass_isSubclassOf_tagclass_0_0.csv")
+        graph_name = f"s3_{annotation}"
+        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", f"tagclass_0_0_{annotation}.csv")
+        edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "tagclass_isSubclassOf_tagclass_0_0.csv")
         datasets.append({
             "graph_name": graph_name,
             "node_label": "Tagclass",
@@ -459,8 +459,8 @@ def create_neo4j_s_all_database(driver, annotation):
     """Create and populate the s_all_{annotation} Neo4j database."""
     graph_name = f"s_all_{annotation}"
     db_name = to_neo4j_db_name(graph_name)
-    nodes_dir = os.path.join(DATA_DIR, "snb", "s_all", "nodes")
-    edges_dir = os.path.join(DATA_DIR, "snb", "s_all", "edges")
+    nodes_dir = os.path.join(DATA_DIR, "snb", "sf1", "nodes")
+    edges_dir = os.path.join(DATA_DIR, "snb", "sf1", "edges")
 
     print(f"  Creating database `{db_name}`...")
     with driver.session(database="system") as session:
@@ -594,7 +594,7 @@ def main():
                 skipped += 1
             print()
 
-        # s_all multi-type graphs
+        # sf1 multi-type graphs
         for annotation in ANNOTATION_TYPES:
             print(f"[s_all_{annotation}]")
             create_neo4j_s_all_database(driver, annotation)

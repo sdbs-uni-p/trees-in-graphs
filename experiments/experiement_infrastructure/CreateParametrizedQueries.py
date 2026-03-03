@@ -48,13 +48,13 @@ class Parametrizer:
             self.current_meta = json.load(f)
 
         self.graph_name = metadata_name
-        if "sf1" in self.graph_name:
+        if "s1" in self.graph_name:
             self.node_name = "Comment"
             self.relation_name = "comment_replyOf_comment_0_0"
-        elif "sf2" in self.graph_name:
+        elif "s2" in self.graph_name:
             self.node_name = "Place"
             self.relation_name = "place_isPartOf_place_0_0"
-        elif "sf3" in self.graph_name:
+        elif "s3" in self.graph_name:
             self.node_name = "Tagclass"
             self.relation_name = "tagclass_isSubclassOf_tagclass_0_0"
         else:
@@ -216,9 +216,9 @@ class ReducedKuzuParametrizer(KuzuParametrizer):
     # Same values as ReducedParametrizer — these are CSV id values
     # (= AGE __id__ property = Kuzu id property)
     _FIXED_ROOTS = {
-        "sf1": 1374390095024,
-        "sf2": 1455,
-        "sf3": 1,
+        "s1": 1374390095024,
+        "s2": 1455,
+        "s3": 1,
         "artificial_forest": 2,
         "_default": 1,
     }
@@ -273,12 +273,12 @@ class ReducedKuzuParametrizer(KuzuParametrizer):
         super().set_metadata(metadata_name)
 
         # Determine the fixed plain rootID
-        if "sf1" in self.graph_name:
-            self._fixed_rootID = self._FIXED_ROOTS["sf1"]
-        elif "sf2" in self.graph_name:
-            self._fixed_rootID = self._FIXED_ROOTS["sf2"]
-        elif "sf3" in self.graph_name:
-            self._fixed_rootID = self._FIXED_ROOTS["sf3"]
+        if "s1" in self.graph_name:
+            self._fixed_rootID = self._FIXED_ROOTS["s1"]
+        elif "s2" in self.graph_name:
+            self._fixed_rootID = self._FIXED_ROOTS["s2"]
+        elif "s3" in self.graph_name:
+            self._fixed_rootID = self._FIXED_ROOTS["s3"]
         elif "artificial_forest" in self.graph_name:
             self._fixed_rootID = self._FIXED_ROOTS["artificial_forest"]
         else:
@@ -403,9 +403,9 @@ class ReducedKuzuParametrizer(KuzuParametrizer):
 
 class ReducedParametrizer(Parametrizer):
     _FIXED_ROOTS = {
-        "sf1": 1374390095024,
-        "sf2": 1455,
-        "sf3": 1,
+        "s1": 1374390095024,
+        "s2": 1455,
+        "s3": 1,
         "artificial_forest": 2,
         "_default": 1,
     }
@@ -443,12 +443,12 @@ $$) AS (string_id agtype);"""
     def set_metadata(self, metadata_name: str):
         super().set_metadata(metadata_name)
 
-        if "sf1" in self.graph_name:
-            self._fixed_rootID = self._FIXED_ROOTS["sf1"]
-        elif "sf2" in self.graph_name:
-            self._fixed_rootID = self._FIXED_ROOTS["sf2"]
-        elif "sf3" in self.graph_name:
-            self._fixed_rootID = self._FIXED_ROOTS["sf3"]
+        if "s1" in self.graph_name:
+            self._fixed_rootID = self._FIXED_ROOTS["s1"]
+        elif "s2" in self.graph_name:
+            self._fixed_rootID = self._FIXED_ROOTS["s2"]
+        elif "s3" in self.graph_name:
+            self._fixed_rootID = self._FIXED_ROOTS["s3"]
         elif "artificial_forest" in self.graph_name:
             self._fixed_rootID = self._FIXED_ROOTS["artificial_forest"]
         else:
