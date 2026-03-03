@@ -1,0 +1,15 @@
+Nested Loop  (cost=0.02..260.63 rows=3333 width=32) (actual time=11.946..12.062 rows=9 loops=1)
+  Join Filter: age_match_vle_terminal_edge(age_id(_agtype_build_vertex(root.id, _label_name('17190'::oid, root.id), root.properties)), d.id, _age_default_alias_0.edges)
+  Rows Removed by Join Filter: 81
+  ->  Nested Loop  (cost=0.00..2.33 rows=10 width=146) (actual time=0.015..0.022 rows=10 loops=1)
+        ->  Seq Scan on "TreeNode" root  (cost=0.00..1.12 rows=1 width=73) (actual time=0.011..0.015 rows=1 loops=1)
+              Filter: (properties @> '{"__id__": 1}'::agtype)
+              Rows Removed by Filter: 9
+        ->  Seq Scan on "TreeNode" d  (cost=0.00..1.10 rows=10 width=73) (actual time=0.002..0.003 rows=10 loops=1)
+  ->  Memoize  (cost=0.02..10.02 rows=1000 width=32) (actual time=1.191..1.191 rows=9 loops=10)
+        Cache Key: root.id, root.id, root.properties
+        Cache Mode: binary
+        Hits: 9  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 2kB
+        ->  Function Scan on age_vle _age_default_alias_0  (cost=0.01..10.01 rows=1000 width=32) (actual time=11.898..11.899 rows=9 loops=1)
+Planning Time: 1.028 ms
+Execution Time: 12.425 ms

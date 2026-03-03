@@ -1,0 +1,11 @@
+Nested Loop  (cost=0.00..913.19 rows=56 width=20) (actual time=0.335..17.642 rows=7512 loops=1)
+  Join Filter: ((c.pre > root_alias.pre) AND (c.post < root_alias.post))
+  ->  Seq Scan on "TreeNode" c  (cost=0.00..427.00 rows=50 width=77) (actual time=0.226..1.413 rows=7512 loops=1)
+        Filter: ((pre + 1) = post)
+        Rows Removed by Filter: 2488
+  ->  Materialize  (cost=0.00..477.05 rows=10 width=8) (actual time=0.000..0.002 rows=1 loops=7512)
+        ->  Seq Scan on "TreeNode" root_alias  (cost=0.00..477.00 rows=10 width=8) (actual time=0.094..12.701 rows=1 loops=1)
+              Filter: (properties @> (format('{"__id__": %s}'::text, 1))::agtype)
+              Rows Removed by Filter: 9999
+Planning Time: 1.052 ms
+Execution Time: 18.007 ms

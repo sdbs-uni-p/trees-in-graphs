@@ -1,0 +1,10 @@
+Nested Loop  (cost=0.28..81.62 rows=1 width=20) (actual time=0.083..3.108 rows=876 loops=1)
+  ->  Seq Scan on "TreeNode" root_alias  (cost=0.00..48.00 rows=1 width=8) (actual time=0.042..2.010 rows=1 loops=1)
+        Filter: (properties @> (format('{"__id__": %s}'::text, 1))::agtype)
+        Rows Removed by Filter: 999
+  ->  Index Scan using "TreeNode_pre_unique" on "TreeNode" c  (cost=0.28..33.60 rows=1 width=77) (actual time=0.034..0.532 rows=876 loops=1)
+        Index Cond: (pre > root_alias.pre)
+        Filter: ((post < root_alias.post) AND ((pre + 1) = post))
+        Rows Removed by Filter: 123
+Planning Time: 1.064 ms
+Execution Time: 3.340 ms

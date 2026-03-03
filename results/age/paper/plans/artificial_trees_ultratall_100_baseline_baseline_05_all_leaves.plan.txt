@@ -1,0 +1,25 @@
+Nested Loop  (cost=0.01..2067.53 rows=22333 width=32) (actual time=12.448..17.153 rows=51 loops=1)
+  Join Filter: age_match_vle_terminal_edge(age_id(_agtype_build_vertex(root.id, _label_name('17460'::oid, root.id), root.properties)), leaf.id, _age_default_alias_0.edges)
+  Rows Removed by Join Filter: 4998
+  ->  Nested Loop  (cost=0.01..23.26 rows=1000 width=105) (actual time=11.017..11.049 rows=99 loops=1)
+        ->  Seq Scan on "TreeNode" root  (cost=0.00..3.25 rows=1 width=73) (actual time=0.013..0.033 rows=1 loops=1)
+              Filter: (properties @> '{"__id__": 1}'::agtype)
+              Rows Removed by Filter: 99
+        ->  Function Scan on age_vle _age_default_alias_0  (cost=0.01..10.01 rows=1000 width=32) (actual time=11.001..11.005 rows=99 loops=1)
+  ->  Materialize  (cost=0.00..425.27 rows=67 width=73) (actual time=0.001..0.014 rows=51 loops=99)
+        ->  Seq Scan on "TreeNode" leaf  (cost=0.00..424.94 rows=67 width=73) (actual time=0.140..1.194 rows=51 loops=1)
+              Filter: (NOT ((SubPlan 1))::agtype)
+              Rows Removed by Filter: 49
+              SubPlan 1
+                ->  Hash Join  (cost=2.26..6.17 rows=2 width=0) (actual time=0.011..0.011 rows=0 loops=100)
+                      Hash Cond: (_age_default_alias_2.id = _age_default_alias_1.start_id)
+                      ->  Append  (cost=0.00..3.50 rows=101 width=8) (actual time=0.001..0.006 rows=47 loops=49)
+                            ->  Seq Scan on _ag_label_vertex _age_default_alias_2_1  (cost=0.00..0.00 rows=1 width=8) (actual time=0.000..0.000 rows=0 loops=49)
+                            ->  Seq Scan on "TreeNode" _age_default_alias_2_2  (cost=0.00..3.00 rows=100 width=8) (actual time=0.001..0.004 rows=47 loops=49)
+                      ->  Hash  (cost=2.24..2.24 rows=2 width=8) (actual time=0.006..0.006 rows=1 loops=100)
+                            Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                            ->  Seq Scan on "TreeEdge" _age_default_alias_1  (cost=0.00..2.24 rows=2 width=8) (actual time=0.004..0.005 rows=1 loops=100)
+                                  Filter: (end_id = leaf.id)
+                                  Rows Removed by Filter: 98
+Planning Time: 1.448 ms
+Execution Time: 17.371 ms

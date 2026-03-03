@@ -1,0 +1,20 @@
+Nested Loop Anti Join  (cost=73898224.85..13931335547644.96 rows=20866408 width=44) (actual time=2353.997..2354.016 rows=5 loops=1)
+  Join Filter: (e.dewey ~~ (d.dewey || '.%'::text))
+  Rows Removed by Join Filter: 93
+  CTE descendants
+    ->  Nested Loop  (cost=0.00..73898224.85 rows=20971264 width=20) (actual time=1824.490..2353.967 rows=11 loops=1)
+          Join Filter: (c.dewey ~~ (root_alias.dewey || '.%'::text))
+          Rows Removed by Join Filter: 2052158
+          ->  Seq Scan on "Comment" c  (cost=0.00..160515.75 rows=2047975 width=240) (actual time=0.316..365.824 rows=2052169 loops=1)
+          ->  Materialize  (cost=0.00..181005.74 rows=2048 width=8) (actual time=0.000..0.001 rows=1 loops=2052169)
+                ->  Seq Scan on "Comment" root_alias  (cost=0.00..180995.50 rows=2048 width=8) (actual time=516.071..1598.027 rows=1 loops=1)
+                      Filter: (properties @> (format('{"__id__": %s}'::text, '1374390095024'::bigint))::agtype)
+                      Rows Removed by Filter: 2052168
+  ->  CTE Scan on descendants d  (cost=0.00..419425.28 rows=20971264 width=44) (actual time=1824.492..1824.494 rows=11 loops=1)
+  ->  CTE Scan on descendants e  (cost=0.00..419425.28 rows=20971264 width=32) (actual time=0.000..48.135 rows=9 loops=11)
+Planning Time: 1.021 ms
+JIT:
+  Functions: 14
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 0.553 ms, Inlining 59.920 ms, Optimization 70.026 ms, Emission 40.002 ms, Total 170.501 ms
+Execution Time: 2373.862 ms

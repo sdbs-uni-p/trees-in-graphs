@@ -1,0 +1,14 @@
+Nested Loop  (cost=0.00..73898224.85 rows=20971264 width=20) (actual time=1819.659..2312.763 rows=11 loops=1)
+  Join Filter: (c.dewey ~~ (root_alias.dewey || '.%'::text))
+  Rows Removed by Join Filter: 2052158
+  ->  Seq Scan on "Comment" c  (cost=0.00..160515.75 rows=2047975 width=240) (actual time=3.036..364.216 rows=2052169 loops=1)
+  ->  Materialize  (cost=0.00..181005.74 rows=2048 width=8) (actual time=0.000..0.001 rows=1 loops=2052169)
+        ->  Seq Scan on "Comment" root_alias  (cost=0.00..180995.50 rows=2048 width=8) (actual time=515.375..1563.909 rows=1 loops=1)
+              Filter: (properties @> (format('{"__id__": %s}'::text, '1374390095024'::bigint))::agtype)
+              Rows Removed by Filter: 2052168
+Planning Time: 1.304 ms
+JIT:
+  Functions: 9
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 0.406 ms, Inlining 61.310 ms, Optimization 50.697 ms, Emission 27.008 ms, Total 139.421 ms
+Execution Time: 2338.947 ms

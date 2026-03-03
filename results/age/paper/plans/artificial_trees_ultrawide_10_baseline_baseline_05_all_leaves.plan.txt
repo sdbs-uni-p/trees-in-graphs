@@ -1,0 +1,28 @@
+Nested Loop  (cost=0.02..200.69 rows=2333 width=32) (actual time=8.955..9.041 rows=6 loops=1)
+  Join Filter: age_match_vle_terminal_edge(age_id(_agtype_build_vertex(root.id, _label_name('17280'::oid, root.id), root.properties)), leaf.id, _age_default_alias_0.edges)
+  Rows Removed by Join Filter: 48
+  ->  Nested Loop  (cost=0.00..15.36 rows=7 width=146) (actual time=0.065..0.102 rows=6 loops=1)
+        ->  Seq Scan on "TreeNode" root  (cost=0.00..1.12 rows=1 width=73) (actual time=0.008..0.011 rows=1 loops=1)
+              Filter: (properties @> '{"__id__": 1}'::agtype)
+              Rows Removed by Filter: 9
+        ->  Seq Scan on "TreeNode" leaf  (cost=0.00..14.16 rows=7 width=73) (actual time=0.055..0.088 rows=6 loops=1)
+              Filter: (NOT ((SubPlan 1))::agtype)
+              Rows Removed by Filter: 4
+              SubPlan 1
+                ->  Nested Loop  (cost=0.00..2.60 rows=2 width=0) (actual time=0.006..0.006 rows=0 loops=10)
+                      Join Filter: (_age_default_alias_2.id = _age_default_alias_1.start_id)
+                      Rows Removed by Join Filter: 2
+                      ->  Append  (cost=0.00..1.16 rows=11 width=8) (actual time=0.001..0.002 rows=8 loops=10)
+                            ->  Seq Scan on _ag_label_vertex _age_default_alias_2_1  (cost=0.00..0.00 rows=1 width=8) (actual time=0.000..0.000 rows=0 loops=10)
+                            ->  Seq Scan on "TreeNode" _age_default_alias_2_2  (cost=0.00..1.10 rows=10 width=8) (actual time=0.001..0.001 rows=8 loops=10)
+                      ->  Materialize  (cost=0.00..1.12 rows=2 width=8) (actual time=0.000..0.000 rows=0 loops=79)
+                            ->  Seq Scan on "TreeEdge" _age_default_alias_1  (cost=0.00..1.11 rows=2 width=8) (actual time=0.001..0.001 rows=1 loops=10)
+                                  Filter: (end_id = leaf.id)
+                                  Rows Removed by Filter: 8
+  ->  Memoize  (cost=0.02..10.02 rows=1000 width=32) (actual time=1.479..1.480 rows=9 loops=6)
+        Cache Key: root.id, root.id, root.properties
+        Cache Mode: binary
+        Hits: 5  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 2kB
+        ->  Function Scan on age_vle _age_default_alias_0  (cost=0.01..10.01 rows=1000 width=32) (actual time=8.867..8.868 rows=9 loops=1)
+Planning Time: 1.106 ms
+Execution Time: 9.296 ms

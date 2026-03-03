@@ -1,0 +1,32 @@
+Nested Loop  (cost=0.01..64241.25 rows=324333 width=32) (actual time=1308841.211..1309858.704 rows=720 loops=1)
+  Join Filter: age_match_vle_terminal_edge(age_id(_agtype_build_vertex(root.id, _label_name('18270'::oid, root.id), root.properties)), leaf.id, _age_default_alias_0.edges)
+  Rows Removed by Join Filter: 1003844
+  ->  Nested Loop  (cost=0.01..69.26 rows=1000 width=171) (actual time=14204.586..14204.700 rows=748 loops=1)
+        ->  Seq Scan on "Place" root  (cost=0.00..49.25 rows=1 width=139) (actual time=1.107..1.111 rows=1 loops=1)
+              Filter: (properties @> '{"__id__": 1455}'::agtype)
+              Rows Removed by Filter: 1459
+        ->  Function Scan on age_vle _age_default_alias_0  (cost=0.01..10.01 rows=1000 width=32) (actual time=14203.474..14203.516 rows=748 loops=1)
+  ->  Materialize  (cost=0.00..40660.26 rows=973 width=139) (actual time=356.939..1730.821 rows=1343 loops=748)
+        ->  Seq Scan on "Place" leaf  (cost=0.00..40655.39 rows=973 width=139) (actual time=266990.160..1294622.257 rows=1343 loops=1)
+              Filter: (NOT ((SubPlan 1))::agtype)
+              Rows Removed by Filter: 117
+              SubPlan 1
+                ->  Nested Loop  (cost=0.00..730121.81 rows=26254 width=0) (actual time=886.715..886.715 rows=0 loops=1460)
+                      Join Filter: (_age_default_alias_2.id = _age_default_alias_1.start_id)
+                      Rows Removed by Join Filter: 2152315
+                      ->  Append  (cost=0.00..157484.34 rows=3181157 width=8) (actual time=0.005..457.685 rows=3099952 loops=1460)
+                            ->  Seq Scan on _ag_label_vertex _age_default_alias_2_1  (cost=0.00..0.00 rows=1 width=8) (actual time=0.000..0.000 rows=0 loops=1460)
+                            ->  Seq Scan on "Comment" _age_default_alias_2_2  (cost=0.00..88718.72 rows=2051972 width=8) (actual time=0.004..214.819 rows=2052169 loops=1460)
+                            ->  Seq Scan on "Forum" _age_default_alias_2_3  (cost=0.00..2927.92 rows=90492 width=8) (actual time=0.001..13.581 rows=90492 loops=1460)
+                            ->  Seq Scan on "Organisation" _age_default_alias_2_4  (cost=0.00..294.55 rows=7955 width=8) (actual time=0.001..1.468 rows=7955 loops=1460)
+                            ->  Seq Scan on "Person" _age_default_alias_2_5  (cost=0.00..464.92 rows=9892 width=8) (actual time=0.001..2.156 rows=9892 loops=1460)
+                            ->  Seq Scan on "Place" _age_default_alias_2_6  (cost=0.00..45.60 rows=1460 width=8) (actual time=0.002..0.191 rows=1408 loops=1460)
+                            ->  Seq Scan on "Post" _age_default_alias_2_7  (cost=0.00..48620.34 rows=1003234 width=8) (actual time=0.005..114.155 rows=1003605 loops=1343)
+                            ->  Seq Scan on "Tag" _age_default_alias_2_8  (cost=0.00..503.80 rows=16080 width=8) (actual time=0.001..2.134 rows=16080 loops=1343)
+                            ->  Seq Scan on "Tagclass" _age_default_alias_2_9  (cost=0.00..2.71 rows=71 width=8) (actual time=0.004..0.009 rows=71 loops=1343)
+                      ->  Materialize  (cost=0.00..29.23 rows=12 width=8) (actual time=0.000..0.000 rows=1 loops=4525930125)
+                            ->  Seq Scan on "place_isPartOf_place" _age_default_alias_1  (cost=0.00..29.18 rows=12 width=8) (actual time=0.082..0.085 rows=1 loops=1460)
+                                  Filter: (end_id = leaf.id)
+                                  Rows Removed by Filter: 1453
+Planning Time: 2.534 ms
+Execution Time: 1309859.384 ms

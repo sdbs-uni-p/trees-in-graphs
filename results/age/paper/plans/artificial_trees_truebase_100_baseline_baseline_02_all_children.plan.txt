@@ -1,0 +1,15 @@
+Hash Join  (cost=6.14..9.53 rows=1 width=32) (actual time=0.305..0.333 rows=4 loops=1)
+  Hash Cond: (child.id = _age_default_alias_0.start_id)
+  ->  Seq Scan on "TreeNode" child  (cost=0.00..3.00 rows=100 width=73) (actual time=0.012..0.022 rows=100 loops=1)
+  ->  Hash  (cost=6.13..6.13 rows=1 width=8) (actual time=0.227..0.228 rows=4 loops=1)
+        Buckets: 1024  Batches: 1  Memory Usage: 9kB
+        ->  Hash Join  (cost=3.26..6.13 rows=1 width=8) (actual time=0.186..0.219 rows=4 loops=1)
+              Hash Cond: (_age_default_alias_0.end_id = (age_id(_agtype_build_vertex(root.id, _label_name('17370'::oid, root.id), root.properties)))::graphid)
+              ->  Seq Scan on "TreeEdge" _age_default_alias_0  (cost=0.00..1.99 rows=99 width=16) (actual time=0.006..0.016 rows=99 loops=1)
+              ->  Hash  (cost=3.25..3.25 rows=1 width=73) (actual time=0.152..0.152 rows=1 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    ->  Seq Scan on "TreeNode" root  (cost=0.00..3.25 rows=1 width=73) (actual time=0.008..0.056 rows=1 loops=1)
+                          Filter: (properties @> '{"__id__": 1}'::agtype)
+                          Rows Removed by Filter: 99
+Planning Time: 1.032 ms
+Execution Time: 0.487 ms

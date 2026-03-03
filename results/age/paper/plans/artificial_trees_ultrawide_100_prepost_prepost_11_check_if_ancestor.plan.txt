@@ -1,0 +1,9 @@
+Nested Loop  (cost=0.00..10.02 rows=1 width=1) (actual time=0.300..0.428 rows=1 loops=1)
+  ->  Seq Scan on "TreeNode" n1  (cost=0.00..5.00 rows=1 width=8) (actual time=0.123..0.220 rows=1 loops=1)
+        Filter: (properties @> (format('{"__id__": %s}'::text, 4))::agtype)
+        Rows Removed by Filter: 99
+  ->  Seq Scan on "TreeNode" n2  (cost=0.00..5.00 rows=1 width=8) (actual time=0.172..0.201 rows=1 loops=1)
+        Filter: (properties @> (format('{"__id__": %s}'::text, 60))::agtype)
+        Rows Removed by Filter: 99
+Planning Time: 0.707 ms
+Execution Time: 0.664 ms

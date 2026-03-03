@@ -1,0 +1,16 @@
+Nested Loop Anti Join  (cost=2667.78..8907.87 rows=498 width=44) (actual time=21.731..11019.283 rows=4961 loops=1)
+  Join Filter: (e.dewey ~~ (d.dewey || '.%'::text))
+  Rows Removed by Join Filter: 74694899
+  CTE descendants
+    ->  Nested Loop  (cost=0.00..2667.78 rows=500 width=41) (actual time=12.821..17.587 rows=9999 loops=1)
+          Join Filter: (c.dewey ~~ (root_alias.dewey || '.%'::text))
+          Rows Removed by Join Filter: 1
+          ->  Seq Scan on "TreeNode" c  (cost=0.00..407.00 rows=10000 width=98) (actual time=0.270..1.036 rows=10000 loops=1)
+          ->  Materialize  (cost=0.00..507.05 rows=10 width=29) (actual time=0.000..0.001 rows=1 loops=10000)
+                ->  Seq Scan on "TreeNode" root_alias  (cost=0.00..507.00 rows=10 width=29) (actual time=0.097..12.534 rows=1 loops=1)
+                      Filter: (properties @> (format('{"__id__": %s}'::text, 1))::agtype)
+                      Rows Removed by Filter: 9999
+  ->  CTE Scan on descendants d  (cost=0.00..10.00 rows=500 width=44) (actual time=12.823..13.492 rows=9999 loops=1)
+  ->  CTE Scan on descendants e  (cost=0.00..10.00 rows=500 width=32) (actual time=0.000..0.357 rows=7471 loops=9999)
+Planning Time: 1.188 ms
+Execution Time: 11019.927 ms

@@ -1,0 +1,13 @@
+Nested Loop  (cost=23.97..191.31 rows=162 width=20) (actual time=3.325..4.236 rows=748 loops=1)
+  ->  Seq Scan on "Place" root_alias  (cost=0.00..93.20 rows=1 width=8) (actual time=3.140..3.153 rows=1 loops=1)
+        Filter: (properties @> (format('{"__id__": %s}'::text, 1455))::agtype)
+        Rows Removed by Filter: 1459
+  ->  Bitmap Heap Scan on "Place" c  (cost=23.97..95.28 rows=162 width=143) (actual time=0.177..0.604 rows=748 loops=1)
+        Recheck Cond: (pre > root_alias.pre)
+        Filter: (post < root_alias.post)
+        Rows Removed by Filter: 711
+        Heap Blocks: exact=34
+        ->  Bitmap Index Scan on "Place_pre_unique"  (cost=0.00..23.93 rows=487 width=0) (actual time=0.160..0.160 rows=1459 loops=1)
+              Index Cond: (pre > root_alias.pre)
+Planning Time: 1.407 ms
+Execution Time: 4.473 ms

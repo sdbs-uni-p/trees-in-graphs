@@ -1,0 +1,16 @@
+Nested Loop  (cost=0.01..133398276244.57 rows=1403636259636 width=32) (actual time=19235.079..49773.933 rows=11 loops=1)
+  Join Filter: age_match_vle_terminal_edge(age_id(_agtype_build_vertex(root.id, _label_name('18180'::oid, root.id), root.properties)), d.id, _age_default_alias_0.edges)
+  Rows Removed by Join Filter: 22573848
+  ->  Nested Loop  (cost=0.00..52818946.38 rows=4210909200 width=472) (actual time=202.333..1361.983 rows=2052169 loops=1)
+        ->  Seq Scan on "Comment" d  (cost=0.00..88723.00 rows=2052100 width=236) (actual time=0.036..277.501 rows=2052169 loops=1)
+        ->  Materialize  (cost=0.00..93863.51 rows=2052 width=236) (actual time=0.000..0.000 rows=1 loops=2052169)
+              ->  Seq Scan on "Comment" root  (cost=0.00..93853.25 rows=2052 width=236) (actual time=202.283..614.790 rows=1 loops=1)
+                    Filter: (properties @> '{"__id__": 1374390095024}'::agtype)
+                    Rows Removed by Filter: 2052168
+  ->  Function Scan on age_vle _age_default_alias_0  (cost=0.01..10.01 rows=1000 width=32) (actual time=0.012..0.012 rows=11 loops=2052169)
+Planning Time: 1.248 ms
+JIT:
+  Functions: 16
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 0.436 ms, Inlining 60.399 ms, Optimization 51.121 ms, Emission 21.080 ms, Total 133.036 ms
+Execution Time: 49799.648 ms

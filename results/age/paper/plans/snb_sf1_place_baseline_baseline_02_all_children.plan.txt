@@ -1,0 +1,15 @@
+Hash Join  (cost=87.68..138.86 rows=7 width=32) (actual time=1.953..2.477 rows=28 loops=1)
+  Hash Cond: (child.id = _age_default_alias_0.start_id)
+  ->  Seq Scan on "Place" child  (cost=0.00..45.60 rows=1460 width=139) (actual time=0.014..0.247 rows=1460 loops=1)
+  ->  Hash  (cost=87.59..87.59 rows=7 width=8) (actual time=1.878..1.879 rows=28 loops=1)
+        Buckets: 1024  Batches: 1  Memory Usage: 10kB
+        ->  Hash Join  (cost=49.26..87.59 rows=7 width=8) (actual time=1.295..1.865 rows=28 loops=1)
+              Hash Cond: (_age_default_alias_0.end_id = (age_id(_agtype_build_vertex(root.id, _label_name('18270'::oid, root.id), root.properties)))::graphid)
+              ->  Seq Scan on "place_isPartOf_place" _age_default_alias_0  (cost=0.00..25.54 rows=1454 width=16) (actual time=0.005..0.206 rows=1454 loops=1)
+              ->  Hash  (cost=49.25..49.25 rows=1 width=139) (actual time=1.245..1.245 rows=1 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    ->  Seq Scan on "Place" root  (cost=0.00..49.25 rows=1 width=139) (actual time=1.089..1.094 rows=1 loops=1)
+                          Filter: (properties @> '{"__id__": 1455}'::agtype)
+                          Rows Removed by Filter: 1459
+Planning Time: 1.345 ms
+Execution Time: 2.646 ms

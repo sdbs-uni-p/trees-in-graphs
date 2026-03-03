@@ -1,0 +1,27 @@
+Gather  (cost=607241.34..821060.17 rows=104856 width=20) (actual time=2939.304..2957.651 rows=3 loops=1)
+  Workers Planned: 2
+  Workers Launched: 2
+  ->  Merge Join  (cost=606241.34..809574.57 rows=43690 width=20) (actual time=2901.539..2902.568 rows=1 loops=3)
+        Merge Cond: (c.depth = ((root_alias.depth + 1)))
+        Join Filter: (c.dewey ~~ (root_alias.dewey || '.%'::text))
+        Rows Removed by Join Filter: 89199
+        ->  Sort  (cost=425133.20..427266.51 rows=853323 width=240) (actual time=850.273..934.003 rows=658058 loops=3)
+              Sort Key: c.depth
+              Sort Method: external merge  Disk: 171960kB
+              Worker 0:  Sort Method: external merge  Disk: 166968kB
+              Worker 1:  Sort Method: external merge  Disk: 167712kB
+              ->  Parallel Seq Scan on "Comment" c  (cost=0.00..148569.23 rows=853323 width=240) (actual time=180.282..338.234 rows=684056 loops=3)
+        ->  Sort  (cost=181108.14..181113.26 rows=2048 width=12) (actual time=1930.190..1932.616 rows=1 loops=3)
+              Sort Key: ((root_alias.depth + 1))
+              Sort Method: quicksort  Memory: 25kB
+              Worker 0:  Sort Method: quicksort  Memory: 25kB
+              Worker 1:  Sort Method: quicksort  Memory: 25kB
+              ->  Seq Scan on "Comment" root_alias  (cost=0.00..180995.50 rows=2048 width=12) (actual time=639.731..1930.178 rows=1 loops=3)
+                    Filter: (properties @> (format('{"__id__": %s}'::text, '1374390095024'::bigint))::agtype)
+                    Rows Removed by Filter: 2052168
+Planning Time: 1.827 ms
+JIT:
+  Functions: 45
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 1.958 ms, Inlining 188.884 ms, Optimization 222.571 ms, Emission 125.821 ms, Total 539.234 ms
+Execution Time: 3002.719 ms

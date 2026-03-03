@@ -1,4 +1,4 @@
-# trees-in-graphs
+# Trees in Graphs
 Experiments on indexing and querying tree structures inside property graphs
 
 ## Kuzu
@@ -57,6 +57,140 @@ docker exec -it -w /project neo4j_treebench_init python -m experiments.neo4j.neo
 ```
 
 Results are written to `results/neo4j/results_raw__<TIMESTAMP>/`, where `<TIMESTAMP>` is the starting time of the experiment.
+
+---
+
+## AGE
+
+### Setup
+
+Start the container from the `docker/age/` directory:
+
+```bash
+cd docker/age
+docker compose up -d
+```
+
+The entrypoint runs a resumable init chain (`entrypoint-resumable-init.sh` + `run-all-init.sh`) that creates graphs, loads prepared data, and builds tree indexes. The container is ready when the healthcheck passes (it checks for `.init_complete` and `pg_isready`).
+
+Default credentials are read from `docker/age/.env`:
+
+```
+POSTGRES_USER=postgresUser
+POSTGRES_PASSWORD=postgresPW
+POSTGRES_DB=postgresDB
+```
+
+### Running experiments
+
+AGE experiments are started via `run_experiments.sh` in the `age_treebench` container. The most important parameters (queries, datasets, runs, warmup, and optional artifact persistence) are summarized below.
+
+### AGE options (`run_experiments.sh`)
+
+| Option | Description |
+|---|---|
+| `-q`, `--queries LIST` | Comma-separated query IDs or filenames/globs, e.g. `01,02`, `01_foo.sql`, `0*`. |
+| `-d`, `--datasets LIST` | Comma-separated datasets/graph names or globs, e.g. `snb_sf1_comment`, `artificial_trees_truebase_100`, `snb*`. |
+| `-n`, `--note TEXT` | Optional run note; appended to `results/age/notes.txt`. |
+| `-w`, `--warmup` | Run one warmup execution per query before measurements. |
+| `-r`, `--runs N` | Number of measurement runs per query (default: `1`). |
+| `-t`, `--timeout-ms N` | Statement timeout in milliseconds (default: `3600000`). |
+| `--timing-off` | Use `EXPLAIN (ANALYZE, TIMING OFF)` for plan runtime measurement. |
+| `--save-plans` | Save one explain plan per graph/query after measurements. |
+| `--save-results` | Save one result output per graph/query after measurements. |
+| `--save-queries` | Save rendered query files. |
+| `-h`, `--help` | Show help. |
+
+### Reproducing The Paper Setup (AGE)
+
+The following command is a good starting point to reproduce the original paper experiment: 5 runs and persistence of plans, results, and rendered queries.
+
+```bash
+docker exec -it -w /experiments age_treebench bash run_experiments.sh \
+    --runs 5 \
+    --save-plans \
+    --save-results \
+    --save-queries
+```
+
+Results are written to timestamped folders under `results/age/<YYYYMMDD_HHMMSS>/runtimes.csv`.
+
+---
+
+## Scripts
+
+The scripts in `scripts/` are helper utilities for combining, plotting, and viewing cross-system baseline comparisons.
+
+### `scripts/compare_baseline_kuzu_age.py`
+
+Compares baseline median runtimes from Kuzu and AGE and writes a joined CSV.
+
+```bash
+python scripts/compare_baseline_kuzu_age.py --kuzu <path|dir|paper|latest> --age <path|dir|paper|latest>
+```
+
+- Inputs:
+    - `--kuzu`: Kuzu CSV file, Kuzu results directory, or shorthand `paper` / `latest`
+    - `--age`: AGE CSV file, AGE results directory, or shorthand `paper` / `latest`
+    - `--out` (optional): explicit output CSV path
+- Default output (if `--out` is omitted):
+    - `results/combined/age_<tag>_kuzu_<tag>/baseline_kuzu_age_compare.csv`
+- Tag selection rule:
+    - Use timestamp folder (`YYYYMMDD_HHMMSS`) if present
+    - else use `paper` if present
+    - else use a fallback derived from the provided path
+
+Examples:
+
+```bash
+python scripts/compare_baseline_kuzu_age.py --age paper --kuzu latest
+python scripts/compare_baseline_kuzu_age.py --age results/age/20260301_130056/runtimes.csv --kuzu results/kuzu/paper/results.csv
+```
+
+### `scripts/plot_speedup_compare.py`
+
+Creates per-query speedup PDFs for AGE/Kuzu/Neo4j.
+
+```bash
+python scripts/plot_speedup_compare.py --age <path|dir|glob|paper|latest> [--kuzu ...] [--neo4j ...]
+```
+
+- Inputs:
+    - `--age`, `--kuzu`, `--neo4j` accept file, directory, glob, or shorthand `paper` / `latest`
+- Default output directory (if `--out-dir` is omitted):
+    - `results/combined/<db_tag_pairs>/`
+- Produces one PDF per AGE query:
+    - `speedup_compare_<query>.pdf`
+
+Examples:
+
+```bash
+python scripts/plot_speedup_compare.py --age latest --kuzu paper
+python scripts/plot_speedup_compare.py --age results/age/20260301_130056/runtimes.csv --kuzu results/kuzu/paper --legend-placement outside
+```
+
+### `scripts/view_baseline_kuzu_age.py`
+
+Shows filtered rows from a combined baseline comparison CSV in a table.
+
+```bash
+python scripts/view_baseline_kuzu_age.py [--csv <file>] [--query <id|name[,id|name...]>]
+```
+
+- `--csv` (optional): explicit comparison CSV
+    - default: latest `results/combined/**/baseline_kuzu_age_compare.csv`
+- `--query` (optional, repeatable or comma-separated)
+    - IDs: `01`, `02`, `05`, `11`
+    - names: `all_descendants`, `all_children`, `all_leaves`, `check_if_ancestor`
+    - if omitted: all queries are included
+
+Examples:
+
+```bash
+python scripts/view_baseline_kuzu_age.py
+python scripts/view_baseline_kuzu_age.py --query 01,11
+python scripts/view_baseline_kuzu_age.py --csv results/combined/age_20260301_130056_kuzu_paper/baseline_kuzu_age_compare.csv --query all_children
+```
 
 ---
 

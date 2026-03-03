@@ -1,0 +1,29 @@
+Nested Loop  (cost=0.01..4319607.58 rows=22223331 width=32) (actual time=21974.649..86279.354 rows=7512 loops=1)
+  Join Filter: age_match_vle_terminal_edge(age_id(_agtype_build_vertex(root.id, _label_name('17910'::oid, root.id), root.properties)), leaf.id, _age_default_alias_0.edges)
+  Rows Removed by Join Filter: 75104976
+  ->  Nested Loop  (cost=0.01..459.01 rows=10000 width=105) (actual time=183.249..187.840 rows=9999 loops=1)
+        ->  Seq Scan on "TreeNode" root  (cost=0.00..259.00 rows=10 width=73) (actual time=161.916..163.691 rows=1 loops=1)
+              Filter: (properties @> '{"__id__": 1}'::agtype)
+              Rows Removed by Filter: 9999
+        ->  Function Scan on age_vle _age_default_alias_0  (cost=0.01..10.01 rows=1000 width=32) (actual time=21.321..22.996 rows=9999 loops=1)
+  ->  Materialize  (cost=0.00..2707973.58 rows=6667 width=73) (actual time=0.000..2.408 rows=7512 loops=9999)
+        ->  Seq Scan on "TreeNode" leaf  (cost=0.00..2707940.25 rows=6667 width=73) (actual time=3.277..21762.564 rows=7512 loops=1)
+              Filter: (NOT ((SubPlan 1))::agtype)
+              Rows Removed by Filter: 2488
+              SubPlan 1
+                ->  Nested Loop  (cost=0.00..1083.06 rows=4 width=0) (actual time=2.174..2.174 rows=0 loops=10000)
+                      Join Filter: (_age_default_alias_2.id = _age_default_alias_1.start_id)
+                      Rows Removed by Join Filter: 4984
+                      ->  Append  (cost=0.00..284.00 rows=10001 width=8) (actual time=0.001..0.830 rows=8750 loops=10000)
+                            ->  Seq Scan on _ag_label_vertex _age_default_alias_2_1  (cost=0.00..0.00 rows=1 width=8) (actual time=0.000..0.000 rows=0 loops=10000)
+                            ->  Seq Scan on "TreeNode" _age_default_alias_2_2  (cost=0.00..234.00 rows=10000 width=8) (actual time=0.001..0.499 rows=8750 loops=10000)
+                      ->  Materialize  (cost=0.00..199.01 rows=4 width=8) (actual time=0.000..0.000 rows=1 loops=87504807)
+                            ->  Seq Scan on "TreeEdge" _age_default_alias_1  (cost=0.00..198.99 rows=4 width=8) (actual time=0.299..0.342 rows=1 loops=10000)
+                                  Filter: (end_id = leaf.id)
+                                  Rows Removed by Filter: 9998
+Planning Time: 1.592 ms
+JIT:
+  Functions: 32
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 0.766 ms, Inlining 60.239 ms, Optimization 68.665 ms, Emission 33.044 ms, Total 162.713 ms
+Execution Time: 86304.959 ms

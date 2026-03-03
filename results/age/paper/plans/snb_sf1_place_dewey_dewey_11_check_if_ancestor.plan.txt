@@ -1,0 +1,9 @@
+Nested Loop  (cost=0.00..186.42 rows=1 width=1) (actual time=1.327..5.119 rows=1 loops=1)
+  ->  Seq Scan on "Place" n1  (cost=0.00..93.20 rows=1 width=7) (actual time=0.085..1.917 rows=1 loops=1)
+        Filter: (properties @> (format('{"__id__": %s}'::text, 1455))::agtype)
+        Rows Removed by Filter: 1459
+  ->  Seq Scan on "Place" n2  (cost=0.00..93.20 rows=1 width=7) (actual time=1.235..3.194 rows=1 loops=1)
+        Filter: (properties @> (format('{"__id__": %s}'::text, 548))::agtype)
+        Rows Removed by Filter: 1459
+Planning Time: 0.759 ms
+Execution Time: 5.329 ms

@@ -1,0 +1,17 @@
+Nested Loop  (cost=0.00..5.98 rows=1 width=32) (actual time=13398.189..13398.216 rows=1 loops=1)
+  ->  Seq Scan on "Tagclass" node1  (cost=0.00..2.89 rows=1 width=125) (actual time=0.025..0.044 rows=1 loops=1)
+        Filter: (properties @> '{"__id__": 240}'::agtype)
+        Rows Removed by Filter: 70
+  ->  Seq Scan on "Tagclass" node2  (cost=0.00..2.89 rows=1 width=125) (actual time=0.048..0.054 rows=1 loops=1)
+        Filter: (properties @> '{"__id__": 47}'::agtype)
+        Rows Removed by Filter: 70
+  SubPlan 1
+    ->  Function Scan on age_vle _age_default_alias_0  (cost=0.01..27.51 rows=333 width=0) (actual time=13397.648..13397.648 rows=0 loops=1)
+          Filter: age_match_vle_terminal_edge(age_id(_agtype_build_vertex(node1.id, _label_name('18360'::oid, node1.id), node1.properties)), age_id(_agtype_build_vertex(node2.id, _label_name('18360'::oid, node2.id), node2.properties)), edges)
+          Rows Removed by Filter: 1
+  SubPlan 2
+    ->  Function Scan on age_vle _age_default_alias_1  (cost=0.01..27.51 rows=333 width=0) (actual time=0.451..0.451 rows=1 loops=1)
+          Filter: age_match_vle_terminal_edge(age_id(_agtype_build_vertex(node2.id, _label_name('18360'::oid, node2.id), node2.properties)), age_id(_agtype_build_vertex(node1.id, _label_name('18360'::oid, node1.id), node1.properties)), edges)
+          Rows Removed by Filter: 3
+Planning Time: 1.292 ms
+Execution Time: 13398.474 ms

@@ -1,0 +1,12 @@
+Nested Loop  (cost=57.16..2595.92 rows=11111 width=20) (actual time=1.238..15.404 rows=9999 loops=1)
+  ->  Seq Scan on "TreeNode" root_alias  (cost=0.00..477.00 rows=10 width=8) (actual time=0.243..8.109 rows=1 loops=1)
+        Filter: (properties @> (format('{"__id__": %s}'::text, 1))::agtype)
+        Rows Removed by Filter: 9999
+  ->  Bitmap Heap Scan on "TreeNode" c  (cost=57.16..192.45 rows=1111 width=77) (actual time=0.986..3.144 rows=9999 loops=1)
+        Recheck Cond: (pre > root_alias.pre)
+        Filter: (post < root_alias.post)
+        Heap Blocks: exact=144
+        ->  Bitmap Index Scan on "TreeNode_pre_unique"  (cost=0.00..56.88 rows=3333 width=0) (actual time=0.936..0.936 rows=9999 loops=1)
+              Index Cond: (pre > root_alias.pre)
+Planning Time: 1.165 ms
+Execution Time: 16.018 ms
