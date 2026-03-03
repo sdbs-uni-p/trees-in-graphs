@@ -216,10 +216,16 @@ class Assessor:
 
 # Maps virtual discovery names → actual database base names.
 # Allows multiple parametrized runs on the same physical database.
-VIRTUAL_TO_DB_MAP = {
+"""VIRTUAL_TO_DB_MAP = {
     "s_all_comment":  "sf1",
     "s_all_place":    "sf1",
     "s_all_tagclass": "sf1",
+}"""
+
+VIRTUAL_TO_DB_MAP = {
+    "s_all_comment":  "s_all",
+    "s_all_place":    "s_all",
+    "s_all_tagclass": "s_all",
 }
 
 # Maps virtual discovery names → existing metadata base names.
