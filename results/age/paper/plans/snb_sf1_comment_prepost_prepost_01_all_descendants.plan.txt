@@ -1,0 +1,14 @@
+Nested Loop  (cost=0.43..37265587.66 rows=470489899 width=20) (actual time=704.434..1796.537 rows=11 loops=1)
+  ->  Seq Scan on "Comment" root_alias  (cost=0.00..180684.72 rows=2058 width=8) (actual time=500.897..1592.989 rows=1 loops=1)
+        Filter: (properties @> (format('{"__id__": %s}'::text, '1374390095024'::bigint))::agtype)
+        Rows Removed by Filter: 2052168
+  ->  Index Scan using "Comment_post_unique" on "Comment" c  (cost=0.43..14019.11 rows=228615 width=241) (actual time=203.494..203.502 rows=11 loops=1)
+        Index Cond: (post < root_alias.post)
+        Filter: (pre > root_alias.pre)
+        Rows Removed by Filter: 849868
+Planning Time: 1.893 ms
+JIT:
+  Functions: 9
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 0.417 ms, Inlining 62.932 ms, Optimization 45.409 ms, Emission 25.774 ms, Total 134.532 ms
+Execution Time: 1822.822 ms

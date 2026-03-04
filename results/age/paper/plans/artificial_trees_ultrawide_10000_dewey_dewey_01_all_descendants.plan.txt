@@ -1,0 +1,10 @@
+Nested Loop  (cost=0.00..2643.78 rows=500 width=30) (actual time=11.005..16.163 rows=9999 loops=1)
+  Join Filter: (c.dewey ~~ (root_alias.dewey || '.%'::text))
+  Rows Removed by Join Filter: 1
+  ->  Seq Scan on "TreeNode" c  (cost=0.00..395.00 rows=10000 width=87) (actual time=0.294..1.029 rows=10000 loops=1)
+  ->  Materialize  (cost=0.00..495.05 rows=10 width=18) (actual time=0.000..0.001 rows=1 loops=10000)
+        ->  Seq Scan on "TreeNode" root_alias  (cost=0.00..495.00 rows=10 width=18) (actual time=0.098..10.694 rows=1 loops=1)
+              Filter: (properties @> (format('{"__id__": %s}'::text, 1))::agtype)
+              Rows Removed by Filter: 9999
+Planning Time: 1.157 ms
+Execution Time: 16.546 ms

@@ -1,0 +1,2 @@
+{"id": 844424930131970, "label": "TreeNode", "properties": {"id": "2", "type": "TreeNode", "__id__": 2}}::vertex
+{"id": 844424930131971, "label": "TreeNode", "properties": {"id": "3", "type": "TreeNode", "__id__": 3}}::vertex

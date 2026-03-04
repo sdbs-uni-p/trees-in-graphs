@@ -1,0 +1,12 @@
+Nested Loop  (cost=4.60..89.04 rows=1 width=38) (actual time=0.084..1.959 rows=2 loops=1)
+  ->  Seq Scan on "TreeNode" root_alias  (cost=0.00..51.00 rows=1 width=30) (actual time=0.055..1.924 rows=1 loops=1)
+        Filter: (properties @> (format('{"__id__": %s}'::text, 1))::agtype)
+        Rows Removed by Filter: 999
+  ->  Bitmap Heap Scan on "TreeNode" c  (cost=4.60..38.03 rows=1 width=95) (actual time=0.023..0.025 rows=2 loops=1)
+        Recheck Cond: (depth = (root_alias.depth + 1))
+        Filter: (dewey ~~ (root_alias.dewey || '.%'::text))
+        Heap Blocks: exact=1
+        ->  Bitmap Index Scan on "TreeNode_depth_dewey_pattern_idx"  (cost=0.00..4.60 rows=43 width=0) (actual time=0.015..0.015 rows=2 loops=1)
+              Index Cond: (depth = (root_alias.depth + 1))
+Planning Time: 1.375 ms
+Execution Time: 2.100 ms

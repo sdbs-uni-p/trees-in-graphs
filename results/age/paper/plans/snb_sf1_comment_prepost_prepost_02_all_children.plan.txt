@@ -1,0 +1,27 @@
+Gather  (cost=613652.31..1061166.41 rows=2352449 width=20) (actual time=2775.580..2792.798 rows=3 loops=1)
+  Workers Planned: 2
+  Workers Launched: 2
+  ->  Merge Join  (cost=612652.31..824921.51 rows=980187 width=20) (actual time=2715.506..2716.285 rows=1 loops=3)
+        Merge Cond: (c.depth = ((root_alias.depth + 1)))
+        Join Filter: ((c.pre > root_alias.pre) AND (c.post < root_alias.post))
+        Rows Removed by Join Filter: 89199
+        ->  Sort  (cost=431854.32..433997.59 rows=857307 width=241) (actual time=861.424..946.327 rows=658058 loops=3)
+              Sort Key: c.depth
+              Sort Method: external merge  Disk: 168920kB
+              Worker 0:  Sort Method: external merge  Disk: 171600kB
+              Worker 1:  Sort Method: external merge  Disk: 165424kB
+              ->  Parallel Seq Scan on "Comment" c  (cost=0.00..148107.07 rows=857307 width=241) (actual time=178.590..339.611 rows=684056 loops=3)
+        ->  Sort  (cost=180797.98..180803.13 rows=2058 width=12) (actual time=1737.128..1739.596 rows=1 loops=3)
+              Sort Key: ((root_alias.depth + 1))
+              Sort Method: quicksort  Memory: 25kB
+              Worker 0:  Sort Method: quicksort  Memory: 25kB
+              Worker 1:  Sort Method: quicksort  Memory: 25kB
+              ->  Seq Scan on "Comment" root_alias  (cost=0.00..180684.72 rows=2058 width=12) (actual time=490.077..1737.117 rows=1 loops=3)
+                    Filter: (properties @> (format('{"__id__": %s}'::text, '1374390095024'::bigint))::agtype)
+                    Rows Removed by Filter: 2052168
+Planning Time: 1.667 ms
+JIT:
+  Functions: 45
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 2.114 ms, Inlining 186.665 ms, Optimization 218.295 ms, Emission 130.286 ms, Total 537.361 ms
+Execution Time: 2835.484 ms

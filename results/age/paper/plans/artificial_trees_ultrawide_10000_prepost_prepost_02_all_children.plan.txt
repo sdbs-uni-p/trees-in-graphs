@@ -1,0 +1,11 @@
+Hash Join  (cost=477.12..912.04 rows=56 width=20) (actual time=13.248..14.511 rows=11 loops=1)
+  Hash Cond: (c.depth = (root_alias.depth + 1))
+  Join Filter: ((c.pre > root_alias.pre) AND (c.post < root_alias.post))
+  ->  Seq Scan on "TreeNode" c  (cost=0.00..377.00 rows=10000 width=77) (actual time=0.282..0.882 rows=10000 loops=1)
+  ->  Hash  (cost=477.00..477.00 rows=10 width=12) (actual time=12.939..12.939 rows=1 loops=1)
+        Buckets: 1024  Batches: 1  Memory Usage: 9kB
+        ->  Seq Scan on "TreeNode" root_alias  (cost=0.00..477.00 rows=10 width=12) (actual time=0.087..12.933 rows=1 loops=1)
+              Filter: (properties @> (format('{"__id__": %s}'::text, 1))::agtype)
+              Rows Removed by Filter: 9999
+Planning Time: 1.126 ms
+Execution Time: 14.667 ms

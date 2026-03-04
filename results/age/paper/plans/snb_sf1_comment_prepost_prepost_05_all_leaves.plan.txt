@@ -1,0 +1,19 @@
+Nested Loop  (cost=1000.00..723278.51 rows=2352523 width=20) (actual time=1660.512..2148.326 rows=5 loops=1)
+  Join Filter: ((c.pre > root_alias.pre) AND (c.post < root_alias.post))
+  Rows Removed by Join Filter: 1610460
+  ->  Gather  (cost=1000.00..154422.40 rows=10288 width=241) (actual time=156.398..298.796 rows=1610465 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        ->  Parallel Seq Scan on "Comment" c  (cost=0.00..152393.60 rows=4287 width=241) (actual time=106.584..271.933 rows=536822 loops=3)
+              Filter: ((pre + 1) = post)
+              Rows Removed by Filter: 147235
+  ->  Materialize  (cost=0.00..180695.01 rows=2058 width=8) (actual time=0.000..0.001 rows=1 loops=1610465)
+        ->  Seq Scan on "Comment" root_alias  (cost=0.00..180684.72 rows=2058 width=8) (actual time=241.394..1406.639 rows=1 loops=1)
+              Filter: (properties @> (format('{"__id__": %s}'::text, '1374390095024'::bigint))::agtype)
+              Rows Removed by Filter: 2052168
+Planning Time: 1.465 ms
+JIT:
+  Functions: 19
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 1.181 ms, Inlining 156.492 ms, Optimization 100.438 ms, Emission 62.538 ms, Total 320.649 ms
+Execution Time: 2171.887 ms

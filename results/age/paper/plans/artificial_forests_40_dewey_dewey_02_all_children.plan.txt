@@ -1,0 +1,12 @@
+Hash Join  (cost=2.81..5.44 rows=1 width=16) (actual time=0.176..0.197 rows=2 loops=1)
+  Hash Cond: (c.depth = (root_alias.depth + 1))
+  Join Filter: (c.dewey ~~ (root_alias.dewey || '.%'::text))
+  Rows Removed by Join Filter: 12
+  ->  Seq Scan on "TreeNode" c  (cost=0.00..2.40 rows=40 width=73) (actual time=0.017..0.024 rows=40 loops=1)
+  ->  Hash  (cost=2.80..2.80 rows=1 width=8) (actual time=0.117..0.118 rows=1 loops=1)
+        Buckets: 1024  Batches: 1  Memory Usage: 9kB
+        ->  Seq Scan on "TreeNode" root_alias  (cost=0.00..2.80 rows=1 width=8) (actual time=0.023..0.105 rows=1 loops=1)
+              Filter: (properties @> (format('{"__id__": %s}'::text, 2))::agtype)
+              Rows Removed by Filter: 39
+Planning Time: 1.407 ms
+Execution Time: 0.329 ms

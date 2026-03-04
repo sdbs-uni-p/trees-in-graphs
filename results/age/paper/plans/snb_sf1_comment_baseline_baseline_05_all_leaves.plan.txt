@@ -1,0 +1,28 @@
+Nested Loop  (cost=0.01..162191312107.00 rows=935757734424 width=32)
+  Join Filter: age_match_vle_terminal_edge(age_id(_agtype_build_vertex(root.id, _label_name('18180'::oid, root.id), root.properties)), leaf.id, _age_default_alias_0.edges)
+  ->  Nested Loop  (cost=0.00..73294318914.87 rows=2807273484 width=472)
+        ->  Seq Scan on "Comment" leaf  (cost=0.00..73259134137.94 rows=1368067 width=236)
+              Filter: (NOT ((SubPlan 1))::agtype)
+              SubPlan 1
+                ->  Nested Loop  (cost=0.00..321295.90 rows=9 width=0)
+                      Join Filter: (_age_default_alias_2.id = _age_default_alias_1.start_id)
+                      ->  Append  (cost=0.00..157485.88 rows=3181059 width=8)
+                            ->  Seq Scan on _ag_label_vertex _age_default_alias_2_1  (cost=0.00..0.00 rows=1 width=8)
+                            ->  Seq Scan on "Comment" _age_default_alias_2_2  (cost=0.00..88723.00 rows=2052100 width=8)
+                            ->  Seq Scan on "Forum" _age_default_alias_2_3  (cost=0.00..2927.92 rows=90492 width=8)
+                            ->  Seq Scan on "Organisation" _age_default_alias_2_4  (cost=0.00..294.55 rows=7955 width=8)
+                            ->  Seq Scan on "Person" _age_default_alias_2_5  (cost=0.00..464.92 rows=9892 width=8)
+                            ->  Seq Scan on "Place" _age_default_alias_2_6  (cost=0.00..45.60 rows=1460 width=8)
+                            ->  Seq Scan on "Post" _age_default_alias_2_7  (cost=0.00..48618.08 rows=1003008 width=8)
+                            ->  Seq Scan on "Tag" _age_default_alias_2_8  (cost=0.00..503.80 rows=16080 width=8)
+                            ->  Seq Scan on "Tagclass" _age_default_alias_2_9  (cost=0.00..2.71 rows=71 width=8)
+                      ->  Materialize  (cost=0.00..20662.38 rows=3 width=8)
+                            ->  Seq Scan on "comment_replyOf_comment" _age_default_alias_1  (cost=0.00..20662.36 rows=3 width=8)
+                                  Filter: (end_id = leaf.id)
+        ->  Materialize  (cost=0.00..93863.51 rows=2052 width=236)
+              ->  Seq Scan on "Comment" root  (cost=0.00..93853.25 rows=2052 width=236)
+                    Filter: (properties @> '{"__id__": 1374390095024}'::agtype)
+  ->  Function Scan on age_vle _age_default_alias_0  (cost=0.01..10.01 rows=1000 width=32)
+JIT:
+  Functions: 45
+  Options: Inlining true, Optimization true, Expressions true, Deforming true

@@ -1,0 +1,19 @@
+Hash Join  (cost=135417.12..231937.11 rows=6774 width=32) (actual time=750.112..1015.002 rows=3 loops=1)
+  Hash Cond: (child.id = _age_default_alias_0.start_id)
+  ->  Seq Scan on "Comment" child  (cost=0.00..88723.00 rows=2052100 width=236) (actual time=0.034..206.600 rows=2052169 loops=1)
+  ->  Hash  (cost=135332.45..135332.45 rows=6774 width=8) (actual time=703.021..703.023 rows=3 loops=1)
+        Buckets: 8192  Batches: 1  Memory Usage: 65kB
+        ->  Hash Join  (cost=36151.85..135332.45 rows=6774 width=8) (actual time=666.435..703.018 rows=3 loops=1)
+              Hash Cond: ((age_id(_agtype_build_vertex(root.id, _label_name('18180'::oid, root.id), root.properties)))::graphid = _age_default_alias_0.end_id)
+              ->  Seq Scan on "Comment" root  (cost=0.00..93853.25 rows=2052 width=236) (actual time=74.650..456.187 rows=1 loops=1)
+                    Filter: (properties @> '{"__id__": 1374390095024}'::agtype)
+                    Rows Removed by Filter: 2052168
+              ->  Hash  (cost=18060.49..18060.49 rows=1040749 width=16) (actual time=199.367..199.368 rows=1040749 loops=1)
+                    Buckets: 262144 (originally 262144)  Batches: 32 (originally 8)  Memory Usage: 6145kB
+                    ->  Seq Scan on "comment_replyOf_comment" _age_default_alias_0  (cost=0.00..18060.49 rows=1040749 width=16) (actual time=0.025..79.831 rows=1040749 loops=1)
+Planning Time: 1.423 ms
+JIT:
+  Functions: 20
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+  Timing: Generation 0.700 ms, Inlining 0.000 ms, Optimization 0.303 ms, Emission 7.987 ms, Total 8.990 ms
+Execution Time: 1039.367 ms

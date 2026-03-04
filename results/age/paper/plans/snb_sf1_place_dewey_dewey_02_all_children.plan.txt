@@ -1,0 +1,12 @@
+Hash Join  (cost=93.21..179.23 rows=1 width=19) (actual time=3.152..3.762 rows=28 loops=1)
+  Hash Cond: (c.depth = (root_alias.depth + 1))
+  Join Filter: (c.dewey ~~ (root_alias.dewey || '.%'::text))
+  Rows Removed by Join Filter: 83
+  ->  Seq Scan on "Place" c  (cost=0.00..78.60 rows=1460 width=142) (actual time=0.054..0.315 rows=1460 loops=1)
+  ->  Hash  (cost=93.20..93.20 rows=1 width=11) (actual time=3.054..3.054 rows=1 loops=1)
+        Buckets: 1024  Batches: 1  Memory Usage: 9kB
+        ->  Seq Scan on "Place" root_alias  (cost=0.00..93.20 rows=1 width=11) (actual time=0.040..3.047 rows=1 loops=1)
+              Filter: (properties @> (format('{"__id__": %s}'::text, 1455))::agtype)
+              Rows Removed by Filter: 1459
+Planning Time: 1.730 ms
+Execution Time: 3.900 ms
