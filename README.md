@@ -198,7 +198,7 @@ python scripts/view_baseline_kuzu_age.py --csv results/combined/age_20260301_130
 ### Usage
 
 ```bash
-python results/results_analysis/kuzu_report.py \
+python results/results_analysis/kuzu_neo4j_report.py \
     --raw-results <path-to-json-dir> \
     --output <output-dir> \
     [--gdms <name>]
@@ -214,14 +214,14 @@ python results/results_analysis/kuzu_report.py \
 
 Kuzu results:
 ```bash
-python results/results_analysis/kuzu_report.py \
+python results/results_analysis/kuzu_neo4j_report.py \
     --raw-results results/kuzu/raw_expanded_mega_8 \
     --output results/results_analysis/kuzu_report
 ```
 
 Neo4j results:
 ```bash
-python results/results_analysis/kuzu_report.py \
+python results/results_analysis/kuzu_neo4j_report.py \
     --raw-results results/neo4j/raw_expanded_mega_2 \
     --output results/results_analysis/neo4j_report \
     --gdms Neo4j

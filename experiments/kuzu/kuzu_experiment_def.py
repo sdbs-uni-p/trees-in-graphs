@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 from experiments.experiement_infrastructure import assess_db, KuzuExecutor, KuzuParametrizer, ReducedKuzuParametrizer
 
 # Add parent directory to path for imports when running as script
@@ -37,7 +38,7 @@ def get_config():
         "paths": {
             "project": Path(os.getenv("PROJECT_PATH", str(default_project_path))),
             "queries_subpath": os.getenv("QUERIES_SUBPATH", "queries/kuzu/cypher"),
-            "results_subpath": os.getenv("RESULTS_SUBPATH", "results/kuzu/raw_expanded_mega_9"),
+            "results_subpath": os.getenv("RESULTS_SUBPATH", f"results/kuzu/results_raw_{datetime.now().strftime('%Y%m%d_%H%M%S')}"),
             "metadata_subpath": os.getenv("METADATA_SUBPATH", "data/graph_metadata"),
         },
         "experiment": {

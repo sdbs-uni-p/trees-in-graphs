@@ -3,7 +3,7 @@
 Benchmark report generator for Kuzu and Neo4j results.
 
 Usage:
-    python kuzu_report.py --raw-results <path-to-json-dir> --output <output-dir> [--gdms <name>]
+    python kuzu_neo4j_report.py --raw-results <path-to-json-dir> --output <output-dir> [--gdms <name>]
 
 Produces in <output-dir>/:
     results.csv          – median client-side runtime per graph / query / annotation
