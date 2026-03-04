@@ -467,6 +467,13 @@ def create_neo4j_s_all_database(driver, annotation):
         session.run(f"CREATE DATABASE `{db_name}` IF NOT EXISTS")
     wait_for_database(driver, db_name)
 
+    # Skip if already populated (same guard as create_neo4j_database)
+    with driver.session(database=db_name) as session:
+        result = session.run("MATCH (n:Forum) RETURN count(n) AS cnt")
+        if result.single()["cnt"] > 0:
+            print(f"  SKIP {graph_name}: database already populated")
+            return True
+
     loaded_labels = set()
 
     with driver.session(database=db_name) as session:
