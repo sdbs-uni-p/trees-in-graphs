@@ -1,0 +1,50 @@
+services:
+  neo4j_treebench_db:
+    image: neo4j:5-enterprise
+    container_name: neo4j_treebench_db
+    environment:
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-treebenchPW}
+      - NEO4J_server_default__listen__address=0.0.0.0
+      # Allow LOAD CSV to read from anywhere (not just /var/lib/neo4j/import)
+      - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+      - NEO4J_server_directories_import=/import
+    volumes:
+      - neo4j_treebench_data:/data
+      - neo4j_treebench_import:/import
+    ports:
+      - "7687:7687"
+      - "7474:7474"
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD:-treebenchPW} 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+    restart: unless-stopped
+
+  neo4j_treebench_init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: neo4j_treebench_init
+    volumes:
+      - ../../:/project:rw
+      - neo4j_treebench_import:/import
+    env_file:
+      - .env
+    environment:
+      - NEO4J_HOST=neo4j_treebench_db
+      - NEO4J_PORT=7687
+    depends_on:
+      neo4j_treebench_db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /app/.initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+
+volumes:
+  neo4j_treebench_data:
+  neo4j_treebench_import:

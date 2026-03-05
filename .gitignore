@@ -8,3 +8,5 @@
 
 # VS Code
 .vscode/
+
+results/kuzu/raw/*

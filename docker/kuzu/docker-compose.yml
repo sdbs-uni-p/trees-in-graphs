@@ -1,0 +1,19 @@
+services:
+  kuzu_treebench:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kuzu_treebench
+    volumes:
+      - kuzu_treebench_data:/kuzu_data
+      - ../../:/project:rw
+      - ./init:/app/init:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /kuzu_data/.initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  kuzu_treebench_data:
