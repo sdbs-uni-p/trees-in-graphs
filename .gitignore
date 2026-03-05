@@ -1,0 +1,10 @@
+# Intellij
+.idea/
+*.iml
+*.iws
+
+# Python
+*__pycache__/
+
+# VS Code
+.vscode/
