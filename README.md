@@ -22,7 +22,7 @@ Execute the experiment runner inside the container from the project root:
 docker exec -it -w /project kuzu_treebench python -m experiments.kuzu.kuzu_experiment_def
 ```
 
-Results are written to `results/kuzu/raw_expanded_mega_8/`.
+Results are written to `results/kuzu/results_raw_<TIMESTAMP>/`, where `<TIMESTAMP>` is the starting time of the experiment.
 
 ---
 
@@ -56,7 +56,7 @@ Execute the experiment runner inside the init container from the project root:
 docker exec -it -w /project neo4j_treebench_init python -m experiments.neo4j.neo4j_experiment_def
 ```
 
-Results are written to `results/neo4j/raw_expanded_mega_2/`.
+Results are written to `results/neo4j/results_raw__<TIMESTAMP>/`, where `<TIMESTAMP>` is the starting time of the experiment.
 
 ---
 
