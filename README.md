@@ -117,6 +117,75 @@ Results are written to timestamped folders under `results/age/<YYYYMMDD_HHMMSS>/
 
 ---
 
+## Queries
+
+The `queries/` directory contains all tree-traversal query implementations, organised by database system and tree-encoding scheme.
+
+### Directory structure
+
+```
+queries/
+├── age/
+│   ├── baseline/       # 4 queries
+│   ├── dewey/          # 4 queries
+│   └── prepost/        # 4 queries
+├── kuzu/
+│   └── cypher/
+│       ├── baseline/   # 12 queries
+│       ├── dewey/      # 12 queries
+│       └── prepost/    # 12 queries
+└── neo4j/
+    └── cypher/
+        ├── baseline/   # 12 queries
+        ├── dewey/      # 12 queries
+        └── prepost/    # 12 queries
+```
+
+Neo4j and Kuzu each implement 10 distinct operations per encoding (30 files each); AGE implements a subset of 4 operations per encoding (12 files total).
+
+### Encoding schemes
+
+Each database system implements the same logical operations under three different tree-encoding strategies:
+
+| Scheme | Description |
+|---|---|
+| `baseline` | Recursive graph traversal following stored edge relationships directly |
+| `dewey` | Hierarchical string IDs (e.g. `"1.2.3"`); descendants are found via prefix matching |
+| `prepost` | DFS pre-/post-order integers; subtree membership is a range-containment check |
+
+### Query naming
+
+Files follow the pattern `{NN}_{operation}.sql`, where the numeric prefix groups equivalent operations across schemes and systems:
+
+| ID | Operation |
+|---|---|
+| `01` | `all_descendants` |
+| `02` | `all_children` |
+| `05` | `all_leaves` |
+| `06` | `count_descendants` |
+| `07` | `count_leaves` |
+| `08` | `check_same_subtree` (positive case) |
+| `10` | `all_ancestors` |
+| `11` | `check_if_ancestor` (positive case) |
+| `12` | `check_same_subtree` (negative case) |
+| `14` | `check_if_ancestor` (negative case) |
+
+### Comparing queries across systems and schemes
+
+To compare queries that implement the same logical operation, open the three scheme variants side-by-side. For example, for `all_descendants` on Neo4j:
+
+```
+queries/neo4j/cypher/baseline/01_all_descendants.sql
+queries/neo4j/cypher/dewey/01_all_descendants.sql
+queries/neo4j/cypher/prepost/01_all_descendants.sql
+```
+
+The numeric prefix is stable across systems, so the same ID in `queries/kuzu/cypher/baseline/` and `queries/age/baseline/` implements the same logical operation — making cross-system, same-scheme comparisons straightforward as well.
+
+All queries are parameterised (e.g. `$NODE_TYPE`, `$rootID`); the experiment runners substitute concrete values at runtime.
+
+---
+
 ## Scripts
 
 The scripts in `scripts/` are helper utilities for combining, plotting, and viewing cross-system baseline comparisons.
@@ -196,7 +265,7 @@ python scripts/view_baseline_kuzu_age.py --csv results/combined/age_20260301_130
 
 ## Generating reports
 
-`results/results_analysis/kuzu_report.py` takes a directory of raw JSON result files and produces a self-contained output directory containing:
+`results/results_analysis/kuzu_neo4j_report.py` takes a directory of raw JSON result files and produces a self-contained output directory containing:
 
 | File | Description |
 |---|---|
@@ -207,7 +276,7 @@ python scripts/view_baseline_kuzu_age.py --csv results/combined/age_20260301_130
 ### Usage
 
 ```bash
-python results/results_analysis/kuzu_neo4j_report.py \
+python scripts/kuzu_neo4j_report.py \
     --raw-results <path-to-json-dir> \
     --output <output-dir> \
     [--gdms <name>]
@@ -223,15 +292,26 @@ python results/results_analysis/kuzu_neo4j_report.py \
 
 Kuzu results:
 ```bash
-python results/results_analysis/kuzu_neo4j_report.py \
-    --raw-results results/kuzu/results_raw_<TIMESTAMP> \
+python scripts/kuzu_neo4j_report.py \
+    --raw-results results/kuzu/results_raw \
     --output results/results_analysis/kuzu_report
 ```
 
 Neo4j results:
 ```bash
-python results/results_analysis/kuzu_neo4j_report.py \
-    --raw-results results/neo4j/results_raw_<TIMESTAMP> \
+python scripts/kuzu_neo4j_report.py \
+    --raw-results results/neo4j/results_raw \
     --output results/results_analysis/neo4j_report \
     --gdms Neo4j
 ```
+
+### Heatmap output location
+
+> **The generated heatmaps (`speedup_heatmap.png`) are written to the `--output` directory you specify.**
+
+For the example commands above, the heatmaps are located at:
+
+| Run | Heatmap path |
+|---|---|
+| Kuzu | `results/results_analysis/kuzu_report/speedup_heatmap.png` |
+| Neo4j | `results/results_analysis/neo4j_report/speedup_heatmap.png` |
