@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: GPL-3.0-only
+
 -- Generic baseline/Dewey/Prepost index builder for Apache AGE
 -- Parameters (psql variables):
 --   graph_name: Required. Graph schema name.

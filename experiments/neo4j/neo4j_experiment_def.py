@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+
 import os
 import sys
 from datetime import datetime
@@ -41,8 +43,8 @@ def get_config():
         },
         "paths": {
             "project": Path(os.getenv("PROJECT_PATH", str(default_project_path))),
-            "queries_subpath": os.getenv("QUERIES_SUBPATH", "queries/neo4j/cypher"),
-            "results_subpath": os.getenv("RESULTS_SUBPATH", f"results/neo4j/results_raw_{datetime.now().strftime('%Y%m%d_%H%M%S')}"),
+            "queries_subpath": os.getenv("QUERIES_SUBPATH", "queries/neo4j"),
+            "results_subpath": os.getenv("RESULTS_SUBPATH", f"results/neo4j/{datetime.now().strftime('%Y%m%d_%H%M%S')}/raw"),
             "metadata_subpath": os.getenv("METADATA_SUBPATH", "data/graph_metadata"),
         },
         "experiment": {
@@ -78,7 +80,7 @@ def run_experiment(config=None):
     print(f"  Results Path: {result_log_base}")
     print(f"  Metadata Path: {metadata_path}")
 
-    # Create executors — all three share the same driver connection;
+    # Create executors â€” all three share the same driver connection;
     # set_graph() in assess_db will point each to the right database
     plain_ne = Neo4jExecutor(
         uri=db_config["uri"],

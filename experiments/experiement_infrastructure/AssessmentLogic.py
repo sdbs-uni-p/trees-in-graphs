@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+
 import copy
 import json
 from pathlib import Path
@@ -214,7 +216,7 @@ class Assessor:
 
         return log_dict
 
-# Maps virtual discovery names → actual database base names.
+# Maps virtual discovery names â†’ actual database base names.
 # Allows multiple parametrized runs on the same physical database.
 """VIRTUAL_TO_DB_MAP = {
     "s_all_comment":  "sf1",
@@ -228,7 +230,7 @@ VIRTUAL_TO_DB_MAP = {
     "s_all_tagclass": "s_all",
 }
 
-# Maps virtual discovery names → existing metadata base names.
+# Maps virtual discovery names â†’ existing metadata base names.
 # Avoids duplicating large metadata files for graphs sharing the same tree structure.
 VIRTUAL_TO_METADATA_MAP = {
     "s_all_comment":  "s1",

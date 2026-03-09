@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: GPL-3.0-only
+
 WITH node1 AS (
   SELECT dewey
   FROM :"graphname".:"nodetype"

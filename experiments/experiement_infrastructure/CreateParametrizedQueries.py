@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+
 import json
 from pathlib import Path
 import random
@@ -110,13 +112,13 @@ class KuzuParametrizer(Parametrizer):
 
     Loads both dewey and prepost metadata and uses index-based correspondence
     to ensure all three variants query the same node. On first use for each
-    graph, builds a string_id→id mapping by querying the dewey Kuzu database
+    graph, builds a string_idâ†’id mapping by querying the dewey Kuzu database
     so that plain id values can be resolved.
 
     Returns parameters:
-      $rootID, $id1, $id2, $nodeID                       — plain id values
-      $deweyRoot, $deweyId1, $deweyId2, $deweyNodeID     — string_id values
-      $prepostRoot, $prepostId1, $prepostId2, $prepostNodeID — integer_id values
+      $rootID, $id1, $id2, $nodeID                       â€” plain id values
+      $deweyRoot, $deweyId1, $deweyId2, $deweyNodeID     â€” string_id values
+      $prepostRoot, $prepostId1, $prepostId2, $prepostNodeID â€” integer_id values
       $REL_TYPE, $NODE_TYPE
 
     Dewey query templates should quote the dewey parameters, e.g.:
@@ -141,7 +143,7 @@ class KuzuParametrizer(Parametrizer):
             print(f"Warning: Prepost metadata not found: {prepost_path}")
             self.prepost_meta = None
 
-        # Build string_id → plain id mapping by querying the dewey database
+        # Build string_id â†’ plain id mapping by querying the dewey database
         # (which now includes the id column alongside string_id).
         self._dewey_to_id = {}
         if self.current_meta is not None:
@@ -154,7 +156,7 @@ class KuzuParametrizer(Parametrizer):
                     plain_id = row[1]
                     self._dewey_to_id[string_id] = plain_id
             except Exception as e:
-                print(f"Warning: could not build dewey→id mapping: {e}")
+                print(f"Warning: could not build deweyâ†’id mapping: {e}")
 
     def _resolve_id(self, dewey_value):
         """Resolve a dewey string_id to its plain id."""
@@ -213,7 +215,7 @@ class ReducedKuzuParametrizer(KuzuParametrizer):
     determined by _FIXED_ROOTS.
     """
 
-    # Same values as ReducedParametrizer — these are CSV id values
+    # Same values as ReducedParametrizer â€” these are CSV id values
     # (= AGE __id__ property = Kuzu id property)
     _FIXED_ROOTS = {
         "s1": 1374390095024,
@@ -249,7 +251,7 @@ class ReducedKuzuParametrizer(KuzuParametrizer):
                 self._params = json.load(f)
 
     def _plain_to_dewey(self, plain_id: int) -> str | None:
-        """Reverse-lookup: plain id → dewey string_id."""
+        """Reverse-lookup: plain id â†’ dewey string_id."""
         if self._dewey_to_id:
             for string_id, pid in self._dewey_to_id.items():
                 if pid == plain_id:
@@ -257,7 +259,7 @@ class ReducedKuzuParametrizer(KuzuParametrizer):
         return None
 
     def _plain_to_prepost(self, plain_id: int):
-        """Resolve plain id → prepost integer_id via index correspondence."""
+        """Resolve plain id â†’ prepost integer_id via index correspondence."""
         dewey_val = self._plain_to_dewey(plain_id)
         if dewey_val and self.current_meta and self.prepost_meta:
             dewey_ids = self.current_meta["id_list"]

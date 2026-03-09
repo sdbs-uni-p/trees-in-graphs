@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+
 """
 Initialize Neo4j databases for the tree benchmark.
 
@@ -63,12 +65,12 @@ def tree_nodes_filename(annotation: str) -> str:
     """Return the tree node CSV filename for a given annotation."""
     return "TreeNode.csv" if annotation == "plain" else f"TreeNode_{annotation}.csv"
 
-# ─── sf1 (full LDBC SNB) constants ──────────────────────────────────────────
+# â”€â”€â”€ sf1 (full LDBC SNB) constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 # Labels that carry tree-annotation columns (dewey/prepost)
 TREE_ANNOTATED_LABELS = {"Comment", "Place", "Tagclass"}
 
-# Non-tree node types: (column_name, cast_fn) — same across all annotation variants
+# Non-tree node types: (column_name, cast_fn) â€” same across all annotation variants
 NON_TREE_NODE_PROPS = {
     "Forum":        [("id","toInteger"),("title",None),("creationDate",None)],
     "Organisation": [("id","toInteger"),("type",None),("name",None),("url",None)],
@@ -255,7 +257,7 @@ def build_dataset_list():
             "annotation": annotation,
         })
 
-    # SNB s2 — Place nodes
+    # SNB s2 â€” Place nodes
     for annotation in ANNOTATION_TYPES:
         graph_name = f"s2_{annotation}"
         node_file = "place_0_0.csv" if annotation == "plain" else f"place_0_0_{annotation}.csv"
@@ -270,7 +272,7 @@ def build_dataset_list():
             "annotation": annotation,
         })
 
-    # SNB s3 — Tagclass nodes
+    # SNB s3 â€” Tagclass nodes
     for annotation in ANNOTATION_TYPES:
         graph_name = f"s3_{annotation}"
         node_file = "tagclass_0_0.csv" if annotation == "plain" else f"tagclass_0_0_{annotation}.csv"

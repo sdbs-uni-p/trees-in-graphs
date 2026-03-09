@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+
 services:
   neo4j_treebench_db:
     image: neo4j:5-enterprise

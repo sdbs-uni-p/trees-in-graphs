@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+
 set -euo pipefail
 
 MARKER_FILE="${PGDATA:-/var/lib/postgresql/data/pgdata}/.init_complete"

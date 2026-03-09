@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: GPL-3.0-only
+
 WITH root AS (
   SELECT pre, post, depth
   FROM :"graphname".:"nodetype"
