@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+
 import argparse
 import csv
 import math
@@ -19,8 +21,8 @@ def infer_source_tag(path_value: str) -> str:
         if TIMESTAMP_PATTERN.match(part):
             return part
 
-    if "paper" in parts_lower:
-        return "paper"
+    if "paper_results" in parts_lower:
+        return "paper_results"
 
     if path_obj.suffix:
         return path_obj.parent.name or path_obj.stem or "input"
@@ -42,7 +44,7 @@ def select_latest_results_dir(base_dir: Path):
     if timestamp_dirs:
         return sorted(timestamp_dirs, key=lambda path: path.name, reverse=True)[0]
 
-    paper_dir = base_dir / "paper"
+    paper_dir = base_dir / "paper_results"
     if paper_dir.is_dir():
         return paper_dir
 
@@ -54,6 +56,12 @@ def select_latest_results_dir(base_dir: Path):
 
 
 def select_csv_from_directory(directory: Path):
+    analysis_dir = directory / "analysis"
+    if analysis_dir.is_dir():
+        preferred_analysis = analysis_dir / "results.csv"
+        if preferred_analysis.is_file():
+            return preferred_analysis
+
     preferred_names = ["runtimes.csv", "results.csv", "result.csv"]
     for file_name in preferred_names:
         candidate = directory / file_name
@@ -73,7 +81,7 @@ def resolve_csv_input(raw_value: str, source: str, repo_root: Path) -> Path:
     if token in {"paper", "latest"}:
         source_root = repo_root / "results" / source
         if token == "paper":
-            selected = source_root / "paper"
+            selected = source_root / "paper_results"
             if not selected.is_dir():
                 raise SystemExit(f"{source.upper()} paper results directory not found: {selected}")
         else:

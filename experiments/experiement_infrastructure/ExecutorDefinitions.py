@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+
 import os
 import time
 from abc import abstractmethod, ABC
@@ -271,8 +273,12 @@ class KuzuExecutor(Executor):
         self.conn = kuzu.Connection(self.db)
 
     def execute_query(self, query_string: str):
+        executable_query = self._strip_leading_sql_comments(query_string)
+        if not executable_query:
+            executable_query = query_string
+
         start = time.perf_counter()
-        result = self.conn.execute(query_string)
+        result = self.conn.execute(executable_query)
         end = time.perf_counter()
         rows = []
         while result.has_next():
@@ -282,9 +288,29 @@ class KuzuExecutor(Executor):
     def update_db(self, new_dbname: str):
         self.set_graph(new_dbname)
 
+    @staticmethod
+    def _strip_leading_sql_comments(query_string: str) -> str:
+        """Remove leading comments so PROFILE sees a statement token first."""
+        q = query_string.lstrip()
+        while True:
+            line_comment = re.match(r"^--[^\n]*(?:\n|$)", q)
+            if line_comment:
+                q = q[line_comment.end():].lstrip()
+                continue
+
+            block_comment = re.match(r"^/\*.*?\*/", q, flags=re.DOTALL)
+            if block_comment:
+                q = q[block_comment.end():].lstrip()
+                continue
+
+            break
+        return q
+
     def collect_query_plan(self, query_string: str):
+        profile_query = self._strip_leading_sql_comments(query_string)
+
         # PROFILE executes the query and returns the plan with timing info
-        profile_result = self.conn.execute(f"PROFILE {query_string}")
+        profile_result = self.conn.execute(f"PROFILE {profile_query}")
         plan = profile_result.get_as_df().to_string(index=False).strip()
 
         # Execute again for wall-clock timing
@@ -349,9 +375,13 @@ class Neo4jExecutor(Executor):
         self.current_db = graph_name.replace("_", ".")
 
     def execute_query(self, query_string: str):
+        executable_query = self._strip_leading_sql_comments(query_string)
+        if not executable_query:
+            executable_query = query_string
+
         with self.driver.session(database=self.current_db) as session:
             start = time.perf_counter()
-            result = session.run(query_string)
+            result = session.run(executable_query)
             records = [
                 [self._serialize(v) for v in record.values()]
                 for record in result
@@ -362,10 +392,30 @@ class Neo4jExecutor(Executor):
     def update_db(self, new_dbname: str):
         self.set_graph(new_dbname)
 
+    @staticmethod
+    def _strip_leading_sql_comments(query_string: str) -> str:
+        """Remove leading comments so PROFILE sees a statement token first."""
+        q = query_string.lstrip()
+        while True:
+            line_comment = re.match(r"^--[^\n]*(?:\n|$)", q)
+            if line_comment:
+                q = q[line_comment.end():].lstrip()
+                continue
+
+            block_comment = re.match(r"^/\*.*?\*/", q, flags=re.DOTALL)
+            if block_comment:
+                q = q[block_comment.end():].lstrip()
+                continue
+
+            break
+        return q
+
     def collect_query_plan(self, query_string: str):
+        profile_query = self._strip_leading_sql_comments(query_string)
+
         # PROFILE executes the query and returns the plan with timing info
         with self.driver.session(database=self.current_db) as session:
-            result = session.run(f"PROFILE {query_string}")
+            result = session.run(f"PROFILE {profile_query}")
             list(result)  # consume records
             summary = result.consume()
             plan = str(summary.profile) if summary.profile else ""

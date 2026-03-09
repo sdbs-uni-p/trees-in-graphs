@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: GPL-3.0-only
+
 -- Load a single node or edge CSV into an existing graph.
 -- Parameters (psql variables):
 --   graph_name: Required. Graph schema name.

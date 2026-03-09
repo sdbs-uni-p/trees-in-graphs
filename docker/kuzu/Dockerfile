@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+
 FROM python:3.11-slim
 
 RUN pip install --no-cache-dir kuzu pandas tqdm polars pyarrow

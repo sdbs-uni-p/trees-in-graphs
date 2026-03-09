@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+
 """
 Benchmark report generator for Kuzu and Neo4j results.
 
 Usage:
-    python kuzu_neo4j_report.py --raw-results <path-to-json-dir> --output <output-dir> [--gdms <name>]
+    python kuzu_neo4j_report.py --raw-results <path-to-json-dir> [--output <output-dir>] [--gdms <name>]
 
 Produces in <output-dir>/:
     results.csv          – median client-side runtime per graph / query / annotation
@@ -220,8 +222,11 @@ def main():
         help="Directory containing the raw JSON result files.",
     )
     parser.add_argument(
-        "--output", required=True, metavar="DIR",
-        help="Output directory to create (will be created if it does not exist).",
+        "--output", required=False, default=None, metavar="DIR",
+        help=(
+            "Output directory to create (will be created if it does not exist). "
+            "Default: sibling 'analysis' directory when --raw-results points to a 'raw' directory."
+        ),
     )
     parser.add_argument(
         "--gdms", default="Kuzu", metavar="NAME",
@@ -230,7 +235,12 @@ def main():
     args = parser.parse_args()
 
     raw_results_dir = Path(args.raw_results)
-    output_dir = Path(args.output)
+    if args.output:
+        output_dir = Path(args.output)
+    elif raw_results_dir.name == "raw":
+        output_dir = raw_results_dir.parent / "analysis"
+    else:
+        parser.error("--output is required unless --raw-results points to a 'raw' directory.")
 
     if not raw_results_dir.is_dir():
         parser.error(f"--raw-results path does not exist or is not a directory: {raw_results_dir}")

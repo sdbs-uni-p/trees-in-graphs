@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: GPL-3.0-only
+
 -- Create a graph schema without loading any data.
 -- Parameters (psql variables):
 --   graph_name: Optional. Graph schema name (overrides derived name)

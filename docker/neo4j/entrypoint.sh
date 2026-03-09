@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-only
+
 set -e
 
 # Run init if databases have not been created yet

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+
 import os
 import sys
 from pathlib import Path
@@ -37,8 +39,8 @@ def get_config():
         },
         "paths": {
             "project": Path(os.getenv("PROJECT_PATH", str(default_project_path))),
-            "queries_subpath": os.getenv("QUERIES_SUBPATH", "queries/kuzu/cypher"),
-            "results_subpath": os.getenv("RESULTS_SUBPATH", f"results/kuzu/results_raw_{datetime.now().strftime('%Y%m%d_%H%M%S')}"),
+            "queries_subpath": os.getenv("QUERIES_SUBPATH", "queries/kuzu"),
+            "results_subpath": os.getenv("RESULTS_SUBPATH", f"results/kuzu/{datetime.now().strftime('%Y%m%d_%H%M%S')}/raw"),
             "metadata_subpath": os.getenv("METADATA_SUBPATH", "data/graph_metadata"),
         },
         "experiment": {
@@ -74,7 +76,7 @@ def run_experiment(config=None):
     print(f"  Results Path: {result_log_base}")
     print(f"  Metadata Path: {metadata_path}")
 
-    # Create executors — all three share the same base path;
+    # Create executors â€” all three share the same base path;
     # set_graph() in assess_db will point each to the right database
     plain_ke = KuzuExecutor(db_base_path=db_config["db_base_path"])
     dewey_ke = KuzuExecutor(db_base_path=db_config["db_base_path"])

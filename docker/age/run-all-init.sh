@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+
 set -euo pipefail
 
 INIT_ROOT="${INIT_ROOT:-/opt/age-init}"

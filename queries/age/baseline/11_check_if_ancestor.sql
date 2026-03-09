@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: GPL-3.0-only
+
 SELECT *
 FROM cypher(:'graphname', $$
   MATCH (node1:$NODE_TYPE {__id__: $id1})
