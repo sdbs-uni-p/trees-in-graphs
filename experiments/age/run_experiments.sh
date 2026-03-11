@@ -976,8 +976,8 @@ for base in "${BASES[@]}"; do
 					((runs_ok+=1))
 					echo "${graph},${query_file%.sql},${run_idx},${runtime}" >> "$CSV_FILE"
 				else
-					((runs_failed+=1))
 					rc=$?
+					((runs_failed+=1))
 					err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_file%.sql}_run${run_idx}").log"
 					if [[ "$rc" -eq 124 ]]; then
 						echo "Query timed out after ${TIMEOUT_MS} ms." > "$err_file"
