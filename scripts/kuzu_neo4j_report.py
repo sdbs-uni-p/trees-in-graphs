@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, Patch
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -68,10 +68,10 @@ QUERY_LABELS = {
     "count_descendants":        "count_descendants",
     "count_leaves":             "count_leaves",
     "all_ancestors":            "all_ancestors",
-    "check_if_ancestor_true":   "ancestor? (T)",
-    "check_if_ancestor_false":  "ancestor? (F)",
-    "check_same_subtree_true":  "same_subtree? (T)",
-    "check_same_subtree_false": "same_subtree? (F)",
+    "check_if_ancestor_true":   "ancestor (T)",
+    "check_if_ancestor_false":  "ancestor (F)",
+    "check_same_subtree_true":  "same_subtree (T)",
+    "check_same_subtree_false": "same_subtree (F)",
 }
 
 _Y_AXIS_ORDER = {name: i for i, name in enumerate(Y_AXIS_LABELS)}
@@ -204,6 +204,10 @@ def plot_speedup_heatmap(df: pd.DataFrame, output_dir: Path, gdms: str = "Kuzu")
                  fontsize=22, y=1.05, fontweight="bold")
     fig.text(0.5, 1.01, "green = faster,  red = slower,  yellow = no change",
              ha="center", va="bottom", fontsize=13, style="italic")
+
+    legend_handle = Patch(fill=False, hatch="////", edgecolor="black", label="slowdown (< 1× speedup)")
+    fig.legend(handles=[legend_handle], loc="upper right", fontsize=10,
+               bbox_to_anchor=(1.0, 1.04), framealpha=0.8)
     plt.tight_layout()
 
     out = output_dir / "speedup_heatmap.png"
