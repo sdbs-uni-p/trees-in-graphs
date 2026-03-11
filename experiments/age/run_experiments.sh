@@ -61,7 +61,6 @@ SAVE_RESULTS="${SAVE_RESULTS:-0}"
 SAVE_QUERIES="${SAVE_QUERIES:-0}"
 TIMEOUT_MS="${TIMEOUT_MS:-3600000}"
 TIMING_OFF="${TIMING_OFF:-0}"
-HINT_DEBUG="${HINT_DEBUG:-1}"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -467,9 +466,6 @@ inject_seqscan_hint() {
 
 	if grep -Eq '/\*\+[[:space:]]*SeqScan\(' "$in_file"; then
 		cp "$in_file" "$out_file"
-		if [[ "$HINT_DEBUG" == "1" ]]; then
-			echo "[hint-debug] existing SeqScan hint kept" >&2
-		fi
 		return
 	fi
 
@@ -479,14 +475,8 @@ inject_seqscan_hint() {
 			echo "/*+ SeqScan(${alias}) Parallel(${alias} 0 hard) */"
 			cat "$in_file"
 		} > "$out_file"
-		if [[ "$HINT_DEBUG" == "1" ]]; then
-			echo "[hint-debug] injected SeqScan(${alias}) + Parallel(${alias} 0 hard)" >&2
-		fi
 	else
 		cp "$in_file" "$out_file"
-		if [[ "$HINT_DEBUG" == "1" ]]; then
-			echo "[hint-debug] no alias found; no hint injected" >&2
-		fi
 	fi
 }
 
@@ -498,9 +488,6 @@ inject_ancestor_seqscan_hints() {
 
 	if grep -Eq '/\*\+[[:space:]]*SeqScan\(' "$in_file"; then
 		cp "$in_file" "$out_file"
-		if [[ "$HINT_DEBUG" == "1" ]]; then
-			echo "[hint-debug] existing SeqScan hint kept" >&2
-		fi
 		return
 	fi
 
@@ -516,10 +503,6 @@ inject_ancestor_seqscan_hints() {
 		echo "/*+ SeqScan(${alias1}) SeqScan(${alias2}) Parallel(${alias1} 0 hard) Parallel(${alias2} 0 hard) */"
 		cat "$in_file"
 	} > "$out_file"
-
-	if [[ "$HINT_DEBUG" == "1" ]]; then
-		echo "[hint-debug] injected dual SeqScan(${alias1}/${alias2}) + Parallel(... 0 hard)" >&2
-	fi
 }
 
 wrap_baseline_transaction() {
@@ -887,6 +870,43 @@ if [ -n "$QUERY_FILTER" ]; then
 	QUERY_FILES=("${FILTERED_QUERY_FILES[@]}")
 fi
 
+if [ "${#BASES[@]}" -eq 0 ]; then
+	echo "No datasets matched filter: ${DATASET_FILTER:-<none>}" >&2
+	exit 0
+fi
+
+if [ "${#QUERY_FILES[@]}" -eq 0 ]; then
+	echo "No queries matched filter: ${QUERY_FILTER:-<none>}" >&2
+	exit 0
+fi
+
+total_jobs=0
+for base in "${BASES[@]}"; do
+	for query_file in "${QUERY_FILES[@]}"; do
+		for graph in \
+			"${base}_baseline" \
+			"${base}_dewey" \
+			"${base}_prepost"; do
+			if [[ -n "${graph_map[$graph]+x}" ]]; then
+				((total_jobs+=1))
+			fi
+		done
+	done
+done
+
+echo "Starting AGE experiments"
+echo "  Output directory: $OUTPUT_DIR"
+echo "  Datasets selected: ${#BASES[@]}"
+echo "  Queries selected: ${#QUERY_FILES[@]}"
+echo "  Total graph-query jobs: $total_jobs"
+
+if [ "$total_jobs" -eq 0 ]; then
+	echo "Nothing to run: no matching graph/query combinations found." >&2
+	exit 0
+fi
+
+current_job=0
+
 for base in "${BASES[@]}"; do
 	for query_file in "${QUERY_FILES[@]}"; do
 		for graph in \
@@ -906,6 +926,8 @@ for base in "${BASES[@]}"; do
 			else
 				continue
 			fi
+
+			((current_job+=1))
 
 			query_root="$QUERY_ROOT"
 
@@ -940,6 +962,9 @@ for base in "${BASES[@]}"; do
 				run_warmup "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root"
 			fi
 
+			runs_ok=0
+			runs_failed=0
+			runs_skipped=0
 			timeout_on_first_run=0
 			for ((run_idx=1; run_idx<=RUNS; run_idx++)); do
 				local_tmpfile="$(mktemp)"
@@ -948,8 +973,10 @@ for base in "${BASES[@]}"; do
 
 				runtime=""
 				if runtime=$(measure_psql_timing_ms_null "$local_tmpfile" "$graph" "$nodetype" "$reltype" "$rootid" "$query_set"); then
+					((runs_ok+=1))
 					echo "${graph},${query_file%.sql},${run_idx},${runtime}" >> "$CSV_FILE"
 				else
+					((runs_failed+=1))
 					rc=$?
 					err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_file%.sql}_run${run_idx}").log"
 					if [[ "$rc" -eq 124 ]]; then
@@ -962,6 +989,7 @@ for base in "${BASES[@]}"; do
 					if [[ "$rc" -eq 124 && "$run_idx" -eq 1 ]]; then
 						timeout_on_first_run=1
 						if (( RUNS > 1 )); then
+							runs_skipped=$((RUNS - 1))
 							for ((skip_idx=2; skip_idx<=RUNS; skip_idx++)); do
 								skip_err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_file%.sql}_run${skip_idx}").log"
 								echo "Skipped run ${skip_idx}: run 1 timed out after ${TIMEOUT_MS} ms." > "$skip_err_file"
@@ -978,19 +1006,37 @@ for base in "${BASES[@]}"; do
 				fi
 			done
 
+			plan_status="off"
 			if [ "$SAVE_PLANS" -eq 1 ]; then
 				if [[ "$timeout_on_first_run" -eq 1 ]]; then
-					run_plan "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root" "explain_only" || true
+					if run_plan "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root" "explain_only"; then
+						plan_status="saved(explain-only)"
+					else
+						plan_status="failed(explain-only)"
+					fi
 				else
-					run_plan "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root" || true
+					if run_plan "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root"; then
+						plan_status="saved"
+					else
+						plan_status="failed"
+					fi
 				fi
 			fi
+
+			result_status="off"
 			if [ "$SAVE_RESULTS" -eq 1 ] && [[ "$timeout_on_first_run" -eq 0 ]]; then
-				run_results "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root" || true
+				if run_results "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root"; then
+					result_status="saved"
+				else
+					result_status="failed"
+				fi
 			elif [ "$SAVE_RESULTS" -eq 1 ] && [[ "$timeout_on_first_run" -eq 1 ]]; then
 				err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_file%.sql}_result").log"
 				echo "Skipped result execution: run 1 timed out after ${TIMEOUT_MS} ms." > "$err_file"
+				result_status="skipped(timeout)"
 			fi
+
+			echo "[$current_job/$total_jobs] graph=$graph query_set=$query_set query=${query_file%.sql} runs_ok=$runs_ok runs_failed=$runs_failed runs_skipped=$runs_skipped plan=$plan_status result=$result_status"
 		done
 	done
 done
