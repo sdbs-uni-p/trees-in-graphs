@@ -50,6 +50,8 @@ docker compose up -d
 
 The entrypoint automatically runs `docker/kuzu/init/00_init_kuzu.py` on first startup, which creates one Kuzu database per graph variant under the `kuzu_treebench_data` Docker volume. The container is ready when the healthcheck passes (it polls for a `.initialized` sentinel file).
 
+To avoid Linux permission conflicts when using `docker exec --user <uid>:<gid>`, the Kuzu entrypoint normalizes `/kuzu_data` permissions during startup.
+
 ### Neo4j
 
 The Neo4j stack consists of two containers: the database (`neo4j_treebench_db`) and an init container (`neo4j_treebench_init`) that waits for the database to be healthy before populating it.
@@ -93,12 +95,22 @@ The AGE container automatically runs a resumable init chain (`entrypoint-resumab
 
 ## Running Experiments
 
+On Linux, `docker exec` runs as `root` by default. This can create root-owned files/directories on bind mounts (for example under `results/`), which then causes permission issues on the host.
+
+To avoid this, run experiment commands with a mapped host user (`-u "$(id -u):$(id -g)"`). On Windows/macOS this is typically not required.
+
 ### Kuzu
 
 Execute the experiment runner inside the container from the project root:
 
 ```bash
 docker exec -it -w /project kuzu_treebench python -m experiments.kuzu.kuzu_experiment_def
+```
+
+On Linux, prefer using a mapped host user:
+
+```bash
+docker exec -it -u "$(id -u):$(id -g)" -w /project kuzu_treebench python -m experiments.kuzu.kuzu_experiment_def
 ```
 
 Results are written to a timestamped folder `results/kuzu/<YYYYMMDD_HHMMSS>/raw/`.
@@ -110,6 +122,12 @@ Execute the experiment runner inside the init container from the project root:
 
 ```bash
 docker exec -it -w /project neo4j_treebench_init python -m experiments.neo4j.neo4j_experiment_def
+```
+
+On Linux, prefer using a mapped host user:
+
+```bash
+docker exec -it -u "$(id -u):$(id -g)" -w /project neo4j_treebench_init python -m experiments.neo4j.neo4j_experiment_def
 ```
 
 Results are written to a timestamped folder `results/neo4j/<YYYYMMDD_HHMMSS>/raw/`.
@@ -143,6 +161,16 @@ docker exec -it -w /experiments age_treebench bash run_experiments.sh \
     --save-plans \
     --save-results \
     --save-queries
+```
+
+On Linux, prefer using a mapped host user:
+
+```bash
+docker exec -it -u "$(id -u):$(id -g)" -w /experiments age_treebench bash run_experiments.sh \
+  --runs 5 \
+  --save-plans \
+  --save-results \
+  --save-queries
 ```
 
 Results are written to a timestamped folder `results/age/<YYYYMMDD_HHMMSS>`.
