@@ -1,0 +1,111 @@
+Hash Join  (cost=425390.72..366267076771577.62 rows=1786000106933191 width=160) (actual time=32797.633..32864.525 rows=1 loops=1)
+  Hash Cond: (_age_default_alias_3.end_id = mod.id)
+  Buffers: shared hit=21914 read=488211, temp read=128702 written=182013
+  ->  Hash Join  (cost=424802.15..274734571290663.09 rows=1786000106933191 width=158) (actual time=32433.842..32500.732 rows=1 loops=1)
+        Hash Cond: ((age_id(_agtype_build_vertex(f.id, _label_name('18270'::oid, f.id), f.properties)))::graphid = _age_default_alias_3.start_id)
+        Buffers: shared hit=21542 read=488211, temp read=128702 written=182013
+        ->  Hash Join  (cost=422100.08..241247069282963.69 rows=1786000106933191 width=150) (actual time=32415.306..32482.194 rows=1 loops=1)
+              Hash Cond: (COALESCE((_agtype_build_vertex("postC".id, _label_name('18270'::oid, "postC".id), "postC".properties)), _agtype_build_vertex(m.id, _label_name('18270'::oid, m.id), m.properties)) = _agtype_build_vertex("postMatch".id, _label_name('18270'::oid, "postMatch".id), "postMatch".properties))
+              Buffers: shared hit=20873 read=488211, temp read=128702 written=182013
+              ->  Nested Loop Left Join  (cost=110158.80..110861216812.73 rows=355916940815 width=278) (actual time=26714.914..28736.484 rows=1 loops=1)
+                    Filter: (COALESCE((_agtype_build_vertex("postC".id, _label_name('18270'::oid, "postC".id), "postC".properties)), _agtype_build_vertex(m.id, _label_name('18270'::oid, m.id), m.properties)) IS NOT NULL)
+                    Buffers: shared hit=18170 read=442915, temp read=59244 written=59244
+                    ->  Append  (cost=0.00..149564.77 rows=3183 width=246) (actual time=0.124..608.499 rows=1 loops=1)
+                          Buffers: shared hit=3994 read=105830
+                          ->  Seq Scan on _ag_label_vertex m_1  (cost=0.00..0.00 rows=1 width=40) (actual time=0.010..0.010 rows=0 loops=1)
+                                Filter: (properties @> '{"__id__": 1236950581249}'::agtype)
+                          ->  Seq Scan on "Comment" m_2  (cost=0.00..93857.91 rows=2052 width=236) (actual time=0.113..387.511 rows=1 loops=1)
+                                Filter: (properties @> '{"__id__": 1236950581249}'::agtype)
+                                Rows Removed by Filter: 2052168
+                                Buffers: shared hit=532 read=67722
+                          ->  Seq Scan on "Forum" m_3  (cost=0.00..3154.15 rows=90 width=150) (actual time=13.958..13.958 rows=0 loops=1)
+                                Filter: (properties @> '{"__id__": 1236950581249}'::agtype)
+                                Rows Removed by Filter: 90492
+                                Buffers: shared hit=2023
+                          ->  Seq Scan on "Organisation" m_4  (cost=0.00..314.44 rows=8 width=187) (actual time=1.366..1.366 rows=0 loops=1)
+                                Filter: (properties @> '{"__id__": 1236950581249}'::agtype)
+                                Rows Removed by Filter: 7955
+                                Buffers: shared hit=215
+                          ->  Seq Scan on "Person" m_5  (cost=0.00..489.65 rows=10 width=263) (actual time=2.383..2.383 rows=0 loops=1)
+                                Filter: (properties @> '{"__id__": 1236950581249}'::agtype)
+                                Rows Removed by Filter: 9892
+                                Buffers: shared hit=366
+                          ->  Seq Scan on "Place" m_6  (cost=0.00..49.25 rows=1 width=139) (actual time=0.266..0.266 rows=0 loops=1)
+                                Filter: (properties @> '{"__id__": 1236950581249}'::agtype)
+                                Rows Removed by Filter: 1460
+                                Buffers: shared hit=31
+                          ->  Seq Scan on "Post" m_7  (cost=0.00..51136.56 rows=1004 width=276) (actual time=200.312..200.312 rows=0 loops=1)
+                                Filter: (properties @> '{"__id__": 1236950581249}'::agtype)
+                                Rows Removed by Filter: 1003605
+                                Buffers: shared hit=482 read=38108
+                          ->  Seq Scan on "Tag" m_8  (cost=0.00..544.00 rows=16 width=140) (actual time=2.654..2.655 rows=0 loops=1)
+                                Filter: (properties @> '{"__id__": 1236950581249}'::agtype)
+                                Rows Removed by Filter: 16080
+                                Buffers: shared hit=343
+                          ->  Seq Scan on "Tagclass" m_9  (cost=0.00..2.89 rows=1 width=125) (actual time=0.021..0.021 rows=0 loops=1)
+                                Filter: (properties @> '{"__id__": 1236950581249}'::agtype)
+                                Rows Removed by Filter: 71
+                                Buffers: shared hit=2
+                    ->  Nested Loop  (cost=110158.80..33143413.52 rows=112379977 width=72) (actual time=26714.780..28127.973 rows=1 loops=1)
+                          Join Filter: (_ag_enforce_edge_uniqueness(_age_default_alias_0.edges, _age_default_alias_1.id) AND age_match_vle_terminal_edge(age_id(_agtype_build_vertex(m.id, _label_name('18270'::oid, m.id), m.properties)), c2.id, _age_default_alias_0.edges))
+                          Rows Removed by Join Filter: 1011419
+                          Buffers: shared hit=14176 read=337085, temp read=59244 written=59244
+                          ->  Hash Join  (cost=110158.79..272263.52 rows=1011420 width=48) (actual time=1773.450..2488.575 rows=1011420 loops=1)
+                                Hash Cond: (_age_default_alias_1.end_id = "postC".id)
+                                Buffers: shared hit=1170 read=113106, temp read=59244 written=59244
+                                ->  Hash Join  (cost=36120.95..164621.65 rows=1011420 width=24) (actual time=225.606..958.657 rows=1011420 loops=1)
+                                      Hash Cond: (c2.id = _age_default_alias_1.start_id)
+                                      Buffers: shared hit=737 read=74902, temp read=10741 written=10741
+                                      ->  Seq Scan on "Comment" c2  (cost=0.00..88726.73 rows=2052473 width=8) (actual time=0.004..246.248 rows=2052169 loops=1)
+                                            Buffers: shared hit=417 read=67785
+                                      ->  Hash  (cost=17551.20..17551.20 rows=1011420 width=24) (actual time=220.638..220.639 rows=1011420 loops=1)
+                                            Buckets: 131072 (originally 131072)  Batches: 16 (originally 8)  Memory Usage: 8628kB
+                                            Buffers: shared hit=320 read=7117, temp written=4680
+                                            ->  Seq Scan on "comment_replyOf_post" _age_default_alias_1  (cost=0.00..17551.20 rows=1011420 width=24) (actual time=0.053..70.973 rows=1011420 loops=1)
+                                                  Buffers: shared hit=320 read=7117
+                                ->  Hash  (cost=53646.28..53646.28 rows=1003885 width=40) (actual time=880.697..880.698 rows=1003605 loops=1)
+                                      Buckets: 131072 (originally 131072)  Batches: 32 (originally 16)  Memory Usage: 28419kB
+                                      Buffers: shared hit=433 read=38204, temp written=43417
+                                      ->  Seq Scan on "Post" "postC"  (cost=0.00..53646.28 rows=1003885 width=40) (actual time=0.125..342.130 rows=1003605 loops=1)
+                                            Buffers: shared hit=433 read=38204
+                          ->  Function Scan on age_vle _age_default_alias_0  (cost=0.01..10.01 rows=1000 width=32) (actual time=0.024..0.024 rows=1 loops=1011420)
+                                Buffers: shared hit=13006 read=223979
+              ->  Hash  (cost=243531.22..243531.22 rows=1003605 width=426) (actual time=3566.066..3566.069 rows=1003605 loops=1)
+                    Buckets: 32768  Batches: 64  Memory Usage: 7250kB
+                    Buffers: shared hit=2697 read=45296, temp read=68589 written=122705
+                    ->  Hash Join  (cost=84053.75..243531.22 rows=1003605 width=426) (actual time=788.539..1969.501 rows=1003605 loops=1)
+                          Hash Cond: ("postMatch".id = _age_default_alias_2.end_id)
+                          Buffers: shared hit=2695 read=45296, temp read=68589 written=68589
+                          ->  Seq Scan on "Post" "postMatch"  (cost=0.00..48626.85 rows=1003885 width=276) (actual time=0.071..139.904 rows=1003605 loops=1)
+                                Buffers: shared hit=448 read=38140
+                          ->  Hash  (cost=48966.69..48966.69 rows=1003605 width=158) (actual time=700.294..700.297 rows=1003605 loops=1)
+                                Buckets: 65536 (originally 65536)  Batches: 64 (originally 32)  Memory Usage: 7681kB
+                                Buffers: shared hit=2247 read=7156, temp read=6153 written=27515
+                                ->  Hash Join  (cost=6004.07..48966.69 rows=1003605 width=158) (actual time=37.072..376.141 rows=1003605 loops=1)
+                                      Hash Cond: (_age_default_alias_2.start_id = f.id)
+                                      Buffers: shared hit=2247 read=7156, temp read=6153 written=6153
+                                      ->  Seq Scan on "forum_containerOf_post" _age_default_alias_2  (cost=0.00..17416.05 rows=1003605 width=16) (actual time=0.024..67.028 rows=1003605 loops=1)
+                                            Buffers: shared hit=224 read=7156
+                                      ->  Hash  (cost=2927.92..2927.92 rows=90492 width=150) (actual time=36.130..36.131 rows=90492 loops=1)
+                                            Buckets: 65536 (originally 65536)  Batches: 8 (originally 4)  Memory Usage: 10937kB
+                                            Buffers: shared hit=2023, temp written=1881
+                                            ->  Seq Scan on "Forum" f  (cost=0.00..2927.92 rows=90492 width=150) (actual time=0.006..6.409 rows=90492 loops=1)
+                                                  Buffers: shared hit=2023
+        ->  Hash  (cost=1570.92..1570.92 rows=90492 width=16) (actual time=17.633..17.634 rows=90492 loops=1)
+              Buckets: 131072  Batches: 1  Memory Usage: 5266kB
+              Buffers: shared hit=666
+              ->  Seq Scan on "forum_hasModerator_person" _age_default_alias_3  (cost=0.00..1570.92 rows=90492 width=16) (actual time=0.029..6.427 rows=90492 loops=1)
+                    Buffers: shared hit=666
+  ->  Hash  (cost=464.92..464.92 rows=9892 width=263) (actual time=363.613..363.614 rows=9892 loops=1)
+        Buckets: 16384  Batches: 1  Memory Usage: 2980kB
+        Buffers: shared hit=366
+        ->  Seq Scan on "Person" mod  (cost=0.00..464.92 rows=9892 width=263) (actual time=0.016..1.136 rows=9892 loops=1)
+              Buffers: shared hit=366
+Planning:
+  Buffers: shared hit=440
+Planning Time: 2.862 ms
+JIT:
+  Functions: 89
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 3.380 ms, Inlining 62.377 ms, Optimization 187.917 ms, Emission 110.072 ms, Total 363.746 ms
+Execution Time: 32898.315 ms

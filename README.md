@@ -7,6 +7,11 @@ In addition to raw and aggregated result files, the repository provides visual a
 - [Find all leaves of a fixed node](results/combined/paper_results/speedup_all_leaves_kuzu_age.pdf)
 - [Check the ancestor-descendant relationship of two fixed nodes](results/combined/paper_results/speedup_check_if_ancestor_kuzu_age.pdf)
 
+Furthermore, for three official LDBC SNB interactive queries, without using structural indexes, the queries, plans, and results are provided:
+- [Queries](queries/age/ldbc/)
+- [Execution plans](results/age/paper_results/ldbc/plans/)
+- [Query results](results/age/paper_results/ldbc/results/)
+
 For a quick start, use the container setup below and then run the experiment/report commands in the documented order.
 
 ## Contents
@@ -176,6 +181,36 @@ docker exec -it -u "$(id -u):$(id -g)" -w /experiments age_treebench bash run_ex
 Results are written to a timestamped folder `results/age/<YYYYMMDD_HHMMSS>`.
 Reference results for the paper setup are stored under `results/age/paper_results/`.
 
+#### Experiments on Official LDBC SNB Queries
+
+Experiments on the official LDBC SNB interactive queries are run in Apache AGE via `run_age_ldbc_sql.sh` in the `age_treebench` container.
+
+The committed interactive queries are:
+
+- `interactive-short-2`
+- `interactive-short-6`
+- `interactive-complex-12`
+
+Options:
+
+| Option | Description |
+|---|---|
+| `-t`, `--timeout-ms N` | Statement timeout in milliseconds (default: `3600000`) |
+| `--explain-options TEXT` | `EXPLAIN` option string, for example `ANALYZE, TIMING OFF` |
+| `--only NAME` | Run only files whose base name matches `NAME` |
+| `--only-regex REGEX` | Run only files whose base name matches `REGEX` |
+
+Reproducing The Paper Setup:
+
+```bash
+docker exec -it -w /experiments age_treebench bash run_age_ldbc_sql.sh \
+  --only interactive-short-2 \
+  --only interactive-short-6 \
+  --only interactive-complex-12
+```
+
+The script writes one result file and one plan file per query to a timestamped folder under `results/age/ldbc_sql_<RUN_ID>/`.
+
 ---
 
 ## Queries
@@ -189,7 +224,8 @@ queries/
 ├── age/
 │   ├── baseline/       # 4 queries
 │   ├── dewey/          # 4 queries
-│   └── prepost/        # 4 queries
+│   ├── prepost/        # 4 queries
+│   └── ldbc/           # 3 official SNB queries, original (cypher) and adapted for AGE (sql)
 ├── kuzu/
 │   ├── baseline/       # 12 queries
 │   ├── dewey/          # 12 queries
@@ -320,6 +356,10 @@ Typical AGE output files/folders inside these directories:
 | `errors/` | Error/timeout logs generated during execution |
 
 This CSV is the AGE input used by the cross-system comparison scripts below.
+
+#### Experiments on Official LDBC SNB Queries
+
+The paper artifact includes the three committed interactive LDBC SNB queries in both Cypher and Apache AGE SQL form under `queries/age/ldbc/cypher/` and `queries/age/ldbc/sql/`. The corresponding reference outputs are stored under `results/age/paper_results/ldbc/`, with one plan and one result file per query.
 
 ### Cross-system Comparisons
 
