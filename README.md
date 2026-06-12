@@ -361,8 +361,6 @@ This CSV is the AGE input used by the cross-system comparison scripts below.
 
 The paper artifact includes the three committed interactive LDBC SNB queries in both Cypher and Apache AGE SQL form under `queries/age/ldbc/cypher/` and `queries/age/ldbc/sql/`. The corresponding reference outputs are stored under `results/age/paper_results/ldbc/`, with one plan and one result file per query.
 
-Official implementations of the LDBC SNB interactive queries are available in the LDBC repository https://github.com/ldbc/ldbc_snb_interactive_v2_impls/tree/main. The versions in this paper artifact are adaptations/translations of these queries.
-
 ### Cross-system Comparisons
 
 #### Speedup Plots per Query
@@ -511,6 +509,8 @@ The original LDBC SNB CSV files were modified as follows:
 - Vertex IDs shifted when necessary to avoid IDs < 1 (required by Apache AGE)
 
 These changes do not modify the graph structure.
+
+Official implementations of the LDBC SNB interactive queries are available in the LDBC repository https://github.com/ldbc/ldbc_snb_interactive_v2_impls/tree/main. The versions in this paper artifact are adaptations/translations of these queries.
 
 These experiments are not official LDBC Benchmark results.
 See the LDBC benchmark fair use policy:
