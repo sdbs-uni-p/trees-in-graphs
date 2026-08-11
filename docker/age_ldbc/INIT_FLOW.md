@@ -1,0 +1,78 @@
+# AGE LDBC Init Flow
+
+This file describes how the init chain runs during container startup with the LDBC SNB SF1 data only.
+
+## Execution order
+
+The entry flow is:
+
+1. `docker/age_ldbc/entrypoint-resumable-init.sh`
+2. `docker/age_ldbc/run-all-init.sh`
+3. `docker/age_ldbc/init/00_init-age.sh`
+4. `docker/age_ldbc/init/10_create_graphs.sh`
+5. `docker/age_ldbc/init/20_load_data.sh`
+6. `docker/age_ldbc/init/30_add_tree_indexes.sh`
+7. `docker/age_ldbc/init/99_init_complete.sh`
+
+`run-all-init.sh` creates done markers per script in `${PGDATA}/.init_state/*.done`, so initialization is resumable.
+
+## 10_create_graphs.sh
+
+- Creates **schema/graphs without data** via SQL: `sql_scripts/10_create_graph_schema.sql`.
+- The workflow scans only `data/prepared/snb/sf1`.
+- Graph names created in this container:
+  - `snb_sf1_baseline`
+  - `snb_sf1_dewey`
+  - `snb_sf1_prepost`
+
+## Canonical LDBC labels
+
+- Node labels are loaded with the documentation casing:
+  - `Comment`, `Forum`, `Organisation`, `Person`, `Post`, `Tag`, `Place`, `TagClass`
+- Relationship labels are normalized to the canonical SNB names:
+  - `HAS_CREATOR`, `HAS_TAG`, `IS_LOCATED_IN`, `REPLY_OF`, `CONTAINER_OF`, `HAS_MEMBER`, `HAS_MODERATOR`, `HAS_INTEREST`, `KNOWS`, `LIKES`, `STUDY_AT`, `WORK_AT`, `IS_PART_OF`, `HAS_TYPE`, `IS_SUBCLASS_OF`
+- The loader merges split CSV families onto one label when the docs treat them as a single relationship, for example:
+  - `comment_replyOf_comment` and `comment_replyOf_post` -> `REPLY_OF`
+  - `person_likes_comment` and `person_likes_post` -> `LIKES`
+  - all `*_isLocatedIn_*` variants -> `IS_LOCATED_IN`
+
+## 20_load_data.sh
+
+- SQL for loading individual CSV files: `sql_scripts/20_load_data.sql`.
+- Nodes and edges are loaded from CSV **once** into a source graph per base.
+- Split edge CSV families are merged per canonical AGE label before loading, so labels like `REPLY_OF`, `HAS_TAG`, `HAS_CREATOR` and `IS_LOCATED_IN` are imported in a single bulk-load call.
+- Afterwards, all other graphs of the same `graph_base` are **cloned** via SQL:
+  - Create label if needed (`create_vlabel`/`create_elabel`)
+  - `TRUNCATE` target label
+  - `INSERT INTO dst.label SELECT * FROM src.label`
+  - `ANALYZE dst.label`
+- Result: CSV I/O once per `graph_base`, then only internal DB copying.
+
+## 30_add_tree_indexes.sh
+
+- SQL for index creation: `sql_scripts/30_add_tree_indexes.sql`.
+- By default, processes only `*_dewey` and `*_prepost`.
+- Tree labels are resolved from the prepared file set and normalized to the LDBC names.
+- For each tree graph, the respective index is created:
+  - `dewey`: columns/constraint + populate + `ANALYZE`
+  - `prepost`: columns/constraints + populate + `ANALYZE`
+
+## Important log prefixes in container output
+
+- `[entrypoint]` start/retry of the resumable init chain
+- `[init-runner]` script order, skip when done markers exist
+- `[10-create]` graph creation and tree-name resolution
+- `[20-load]` CSV load into source graph + cloning into target graphs
+- `[30-index]` tree matching and index creation per graph
+- `[init]` completion marker written
+
+## SNB SF1 example
+
+With `data/prepared/snb/sf1`, these graphs are created per suffix:
+
+- `snb_sf1_baseline`
+- `snb_sf1_dewey`
+- `snb_sf1_prepost`
+
+`20_load_data.sh` loads CSVs once into one of these graphs (per base) and clones data to the others.
+`30_add_tree_indexes.sh` indexes the tree graphs using the canonical LDBC labels.

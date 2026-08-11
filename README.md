@@ -183,7 +183,7 @@ Reference results for the paper setup are stored under `results/age/paper_result
 
 #### Experiments on Official LDBC SNB Queries
 
-Experiments on the official LDBC SNB interactive queries are run in Apache AGE via `run_age_ldbc_sql.sh` in the `age_treebench` container.
+Experiments on the official LDBC SNB interactive queries are run via `experiments/age_ldbc/run_experiments.sh` in the `age_ldbc_treebench` container, using the baseline, Dewey, and pre/post query sets under `queries/age_ldbc/`.
 
 The committed interactive queries are:
 
@@ -196,20 +196,36 @@ Options:
 | Option | Description |
 |---|---|
 | `-t`, `--timeout-ms N` | Statement timeout in milliseconds (default: `3600000`) |
-| `--explain-options TEXT` | `EXPLAIN` option string, for example `ANALYZE, TIMING OFF` |
-| `--only NAME` | Run only files whose base name matches `NAME` |
-| `--only-regex REGEX` | Run only files whose base name matches `REGEX` |
+| `-q`, `--queries LIST` | Comma-separated query ids or filenames (globs supported) |
+| `-d`, `--datasets LIST` | Comma-separated dataset or graph names (globs supported) |
+| `-r`, `--runs N` | Number of measurement runs per query (default: `1`) |
+| `--save-plans` | Save an execution plan per graph/query |
+| `--save-results` | Save result output per graph/query |
+| `--save-queries` | Save the original SQL query files |
 
 Reproducing The Paper Setup:
 
 ```bash
-docker exec -it -w /experiments age_treebench bash run_age_ldbc_sql.sh \
-  --only interactive-short-2 \
-  --only interactive-short-6 \
-  --only interactive-complex-12
+docker exec -it -w /experiments/age_ldbc age_ldbc_treebench bash run_experiments.sh \
+  --queries interactive-short-2,interactive-short-6,interactive-complex-12 \
+  --runs 5 \
+  --save-plans \
+  --save-results \
+  --save-queries
 ```
 
-The script writes one result file and one plan file per query to a timestamped folder under `results/age/ldbc_sql_<RUN_ID>/`.
+On Linux, prefer using a mapped host user:
+
+```bash
+docker exec -it -u "$(id -u):$(id -g)" -w /experiments/age_ldbc age_ldbc_treebench bash run_experiments.sh \
+  --queries interactive-short-2,interactive-short-6,interactive-complex-12 \
+  --runs 5 \
+  --save-plans \
+  --save-results \
+  --save-queries
+```
+
+The script writes runtimes and the requested results and plans to a timestamped folder under `results/age_ldbc/`.
 
 ---
 
@@ -359,7 +375,7 @@ This CSV is the AGE input used by the cross-system comparison scripts below.
 
 #### Experiments on Official LDBC SNB Queries
 
-The paper artifact includes the three committed interactive LDBC SNB queries in both Cypher and Apache AGE SQL form under `queries/age/ldbc/cypher/` and `queries/age/ldbc/sql/`. The corresponding reference outputs are stored under `results/age/paper_results/ldbc/`, with one plan and one result file per query.
+The three committed interactive LDBC SNB queries are available as original Cypher under `queries/age_ldbc/original/` and as Apache AGE SQL under `queries/age_ldbc/{baseline,dewey,prepost}/`. New benchmark outputs are stored under `results/age_ldbc/`.
 
 ### Cross-system Comparisons
 
