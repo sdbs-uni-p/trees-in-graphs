@@ -114,7 +114,17 @@ function node_label_from_file() {
     return
   fi
 
-  echo "${label_raw^}"
+  case "${label_raw,,}" in
+    comment) echo "Comment" ;;
+    forum) echo "Forum" ;;
+    organisation) echo "Organisation" ;;
+    person) echo "Person" ;;
+    post) echo "Post" ;;
+    tag) echo "Tag" ;;
+    place) echo "Place" ;;
+    tagclass) echo "TagClass" ;;
+    *) echo "${label_raw^}" ;;
+  esac
 }
 
 function edge_label_from_file() {
@@ -131,7 +141,32 @@ function edge_label_from_file() {
     return
   fi
 
-  echo "$label_raw"
+  case "${label_raw,,}" in
+    comment_hascreator_person|post_hascreator_person) echo "HAS_CREATOR" ;;
+    comment_hastag_tag|forum_hastag_tag|post_hastag_tag) echo "HAS_TAG" ;;
+    comment_islocatedin_place|organisation_islocatedin_place|person_islocatedin_place|post_islocatedin_place) echo "IS_LOCATED_IN" ;;
+    comment_replyof_comment|comment_replyof_post) echo "REPLY_OF" ;;
+    forum_containerof_post) echo "CONTAINER_OF" ;;
+    forum_hasmember_person) echo "HAS_MEMBER" ;;
+    forum_hasmoderator_person) echo "HAS_MODERATOR" ;;
+    person_hasinterest_tag) echo "HAS_INTEREST" ;;
+    person_knows_person) echo "KNOWS" ;;
+    person_likes_comment|person_likes_post) echo "LIKES" ;;
+    person_studyat_organisation) echo "STUDY_AT" ;;
+    person_workat_organisation) echo "WORK_AT" ;;
+    place_ispartof_place) echo "IS_PART_OF" ;;
+    tag_hastype_tagclass) echo "HAS_TYPE" ;;
+    tagclass_issubclassof_tagclass) echo "IS_SUBCLASS_OF" ;;
+    *) echo "$label_raw" ;;
+  esac
+}
+
+normalize_entity_label() {
+  local value="$1"
+  case "${value,,}" in
+    tagclass) echo "tagclass" ;;
+    *) echo "${value,,}" ;;
+  esac
 }
 
 function edge_file_matches_node_label() {
@@ -165,7 +200,7 @@ function edge_file_matches_node_label() {
   [[ -z "$raw" ]] && return 1
   start_type="${raw%%|*}"
   end_type="${raw##*|}"
-  [[ "$start_type" == "$node_label" && "$end_type" == "$node_label" ]]
+  [[ "$(normalize_entity_label "$start_type")" == "$(normalize_entity_label "$node_label")" && "$(normalize_entity_label "$end_type")" == "$(normalize_entity_label "$node_label")" ]]
 }
 
 function graph_stem_from_name() {

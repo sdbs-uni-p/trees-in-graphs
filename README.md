@@ -148,6 +148,7 @@ Options:
 |---|---|
 | `-q`, `--queries LIST` | Comma-separated query IDs or filenames/globs, e.g. `01,02`, `01_foo.sql`, `0*`. |
 | `-d`, `--datasets LIST` | Comma-separated datasets/graph names or globs, e.g. `snb_sf1_comment`, `artificial_trees_truebase_100`, `snb*`. |
+| `-s`, `--scenarios LIST` | Comma-separated scenario names or globs, e.g. `q03,q04,q05` or `q0?`. |
 | `-n`, `--note TEXT` | Optional run note; appended to `results/age/notes.txt`. |
 | `-w`, `--warmup` | Run one warmup execution per query before measurements. |
 | `-r`, `--runs N` | Number of measurement runs per query (default: `1`). |
@@ -156,7 +157,18 @@ Options:
 | `--save-plans` | Save one explain plan per graph/query after measurements. |
 | `--save-results` | Save one result output per graph/query after measurements. |
 | `--save-queries` | Save rendered query files. |
+| `--parameters-file FILE` | Parameter CSV (default: `experiments/age/query_parameters.csv`). |
 | `-h`, `--help` | Show help. |
+
+The parameter CSV uses the long format `graph,query,scenario,parameter,value`,
+so it has no empty fields: only parameters used by a query appear in its rows.
+A scenario groups the parameters for one execution of a query; every scenario
+is measured independently. Scenarios with identical parameter values for the
+same graph and query are collapsed to one execution; their IDs are combined
+(for example, `q01_q02`). `graph` is the base graph name without the AGE
+encoding suffix (`_baseline`, `_dewey`, or `_prepost`), so one parameter group
+applies to all three representations. The current queries require `rootid`
+(queries 01, 02, and 05) or `id1` and `id2` (query 11).
 
 Reproducing The Paper Setup:
 
@@ -365,7 +377,7 @@ Typical AGE output files/folders inside these directories:
 
 | File/Folder | Description |
 |---|---|
-| `runtimes.csv` | AGE runtimes CSV used by cross-system comparison scripts |
+| `runtimes.csv` | AGE runtimes CSV (`graph,query,scenario,run,runtime_ms`) used by cross-system comparison scripts |
 | `plans/` | Saved explain plans (`--save-plans`) |
 | `results/` | Saved query result payloads (`--save-results`) |
 | `queries/` | Saved executed queries (`--save-queries`) |

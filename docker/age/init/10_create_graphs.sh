@@ -115,6 +115,12 @@ collect_tree_names() {
     normalized="$(normalize_tree_name "$label")"
     [[ -z "$normalized" ]] && continue
 
+    # Artificial datasets use the generic TreeNode label. It identifies the
+    # sole tree in the dataset, not a distinct graph variant, so retain the
+    # base graph name (for example artificial_trees_truebase_100_baseline).
+    # LDBC tree labels such as comment, place, and tagclass remain suffixes.
+    [[ "$normalized" == "treenode" ]] && continue
+
     if [[ -z "${seen[$normalized]+x}" ]]; then
       seen[$normalized]=1
       echo "$normalized"

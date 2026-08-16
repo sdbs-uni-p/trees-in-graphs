@@ -10,7 +10,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       PGDATA: /var/lib/postgresql/data/pgdata
       INIT_ROOT: /opt/age-init
-      DATA_PATHS: /data/prepared/artificial_forests/* /data/prepared/artificial_trees/*/10 /data/prepared/artificial_trees/*/100 /data/prepared/artificial_trees/*/1000 /data/prepared/artificial_trees/*/10000 /data/prepared/snb/sf1
+      DATA_ROOT: /data/prepared
+      DATA_PATHS: /data/prepared/artificial_forests/* /data/prepared/artificial_trees/*/* /data/prepared/snb/sf1
     command:
       - postgres
       - -c

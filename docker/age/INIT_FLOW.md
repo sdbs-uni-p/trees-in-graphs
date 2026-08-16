@@ -19,6 +19,9 @@ The entry flow is:
 ## 10_create_graphs.sh
 
 - Creates **schema/graphs without data** via SQL: `sql_scripts/10_create_graph_schema.sql`.
+- The generic artificial-tree label `TreeNode` does not become part of a graph
+  name; for example, the graph is `artificial_trees_truebase_100_baseline`,
+  not `artificial_trees_truebase_100_treenode_baseline`.
 - If `trees.csv` exists in a graph directory and contains declarations, graph names are generated as:
   - `<graph_base>_<tree_name_lowercase>_baseline`
   - `<graph_base>_<tree_name_lowercase>_dewey`
@@ -39,6 +42,12 @@ The entry flow is:
   - `INSERT INTO dst.label SELECT * FROM src.label`
   - `ANALYZE dst.label`
 - Result: CSV I/O once per `graph_base`, then only internal DB copying.
+- For the SNB SF1 files, uses the same canonical LDBC labels as
+  `age_ldbc_treebench` and merges split edge-file families before loading (for
+  example both `comment_replyOf_*` files into `REPLY_OF`).
+- During Dewey/PrePost reconstruction, edges whose target lies outside the
+  current tree label are treated as root boundaries. This preserves the
+  Comment tree when canonical `REPLY_OF` also contains Comment-to-Post edges.
 
 ## 30_add_tree_indexes.sh
 

@@ -57,6 +57,7 @@ DECLARE
   idx_depth_dewey text;
   idx_depth_dewey_pattern text;
   idx_depth_pre text;
+  is_comment_tree boolean;
 BEGIN
   SELECT v.graph_name, v.node_table, v.edge_table, v.index_kind
   INTO gname, node_tbl, edge_tbl, kind
@@ -94,6 +95,7 @@ BEGIN
   idx_depth_dewey := format('%s_depth_dewey_idx', node_tbl);
   idx_depth_dewey_pattern := format('%s_depth_dewey_pattern_idx', node_tbl);
   idx_depth_pre := format('%s_depth_pre_idx', node_tbl);
+  is_comment_tree := lower(node_tbl) = 'comment';
 
   IF kind = 'baseline' THEN
     -- EXECUTE format(
@@ -131,43 +133,87 @@ BEGIN
       EXECUTE format('ALTER TABLE %I.%I ADD CONSTRAINT %I UNIQUE (dewey)', gname, node_tbl, con_dewey);
     END IF;
 
-    EXECUTE format($sql$
-      WITH RECURSIVE
-      root_order AS (
-        SELECT c.id AS node_id,
-               ROW_NUMBER() OVER (ORDER BY c.id) AS ord
-         FROM %I.%I c
-         LEFT JOIN %I.%I e
-               ON e.start_id = c.id
-        WHERE e.start_id IS NULL
-      ),
-      child_order AS (
-         SELECT e.end_id AS parent_id,
-           e.start_id AS child_id,
-           ROW_NUMBER() OVER (PARTITION BY e.end_id ORDER BY e.start_id) AS ord
-         FROM %I.%I e
-      ),
-      dewey AS (
-        SELECT r.node_id AS id,
-           r.ord::text AS dewey,
-           0::integer AS depth
-        FROM root_order r
+    IF is_comment_tree THEN
+      EXECUTE format($sql$
+        WITH RECURSIVE
+        root_order AS (
+          SELECT c.id AS node_id,
+                 ROW_NUMBER() OVER (ORDER BY c.id) AS ord
+          FROM %I.%I c
+          JOIN %I.%I e
+                ON e.start_id = c.id
+          LEFT JOIN %I.%I p
+                ON p.id = e.end_id
+          WHERE p.id IS NULL
+        ),
+        child_order AS (
+          SELECT e.end_id AS parent_id,
+                 e.start_id AS child_id,
+                 ROW_NUMBER() OVER (PARTITION BY e.end_id ORDER BY e.start_id) AS ord
+          FROM %I.%I e
+          JOIN %I.%I p
+                ON p.id = e.end_id
+        ),
+        dewey AS (
+          SELECT r.node_id AS id,
+                 r.ord::text AS dewey,
+                 0::integer AS depth
+          FROM root_order r
 
-        UNION ALL
+          UNION ALL
 
-        SELECT co.child_id AS id,
-           d.dewey || '.' || co.ord::text AS dewey,
-           d.depth + 1 AS depth
+          SELECT co.child_id AS id,
+                 d.dewey || '.' || co.ord::text AS dewey,
+                 d.depth + 1 AS depth
+          FROM dewey d
+          JOIN child_order co
+            ON co.parent_id = d.id
+        )
+        UPDATE %I.%I c
+        SET dewey = d.dewey,
+            depth = d.depth
         FROM dewey d
-        JOIN child_order co
-          ON co.parent_id = d.id
-      )
-      UPDATE %I.%I c
-            SET dewey = d.dewey,
-           depth = d.depth
-      FROM dewey d
-      WHERE d.id = c.id;
-    $sql$, gname, node_tbl, gname, edge_tbl, gname, edge_tbl, gname, node_tbl);
+        WHERE d.id = c.id;
+      $sql$, gname, node_tbl, gname, edge_tbl, gname, node_tbl, gname, edge_tbl, gname, node_tbl, gname, node_tbl);
+    ELSE
+      EXECUTE format($sql$
+        WITH RECURSIVE
+        root_order AS (
+          SELECT c.id AS node_id,
+                 ROW_NUMBER() OVER (ORDER BY c.id) AS ord
+          FROM %I.%I c
+          LEFT JOIN %I.%I e
+                ON e.start_id = c.id
+          WHERE e.start_id IS NULL
+        ),
+        child_order AS (
+           SELECT e.end_id AS parent_id,
+             e.start_id AS child_id,
+             ROW_NUMBER() OVER (PARTITION BY e.end_id ORDER BY e.start_id) AS ord
+           FROM %I.%I e
+        ),
+        dewey AS (
+          SELECT r.node_id AS id,
+             r.ord::text AS dewey,
+             0::integer AS depth
+          FROM root_order r
+
+          UNION ALL
+
+          SELECT co.child_id AS id,
+             d.dewey || '.' || co.ord::text AS dewey,
+             d.depth + 1 AS depth
+          FROM dewey d
+          JOIN child_order co
+            ON co.parent_id = d.id
+        )
+        UPDATE %I.%I c
+        SET dewey = d.dewey,
+            depth = d.depth
+        FROM dewey d
+        WHERE d.id = c.id;
+      $sql$, gname, node_tbl, gname, edge_tbl, gname, edge_tbl, gname, node_tbl);
+    END IF;
 
     EXECUTE format(
       'CREATE INDEX IF NOT EXISTS %I ON %I.%I (depth, dewey)',
@@ -200,66 +246,133 @@ BEGIN
       EXECUTE format('ALTER TABLE %I.%I ADD CONSTRAINT %I UNIQUE (post)', gname, node_tbl, con_post);
     END IF;
 
-    EXECUTE format($sql$
-      WITH RECURSIVE
-      root_order AS (
-        SELECT c.id AS node_id,
-               ROW_NUMBER() OVER (ORDER BY c.id)::bigint AS ord
-         FROM %I.%I c
-         LEFT JOIN %I.%I e
-               ON e.start_id = c.id
-        WHERE e.start_id IS NULL
-      ),
-      child_order AS (
-         SELECT e.end_id AS parent_id,
-           e.start_id AS child_id,
-           ROW_NUMBER() OVER (PARTITION BY e.end_id ORDER BY e.start_id)::bigint AS ord
-         FROM %I.%I e
-      ),
-      walk AS (
-        SELECT r.node_id AS id,
-           ARRAY[r.ord]::bigint[] AS path,
-           0::integer AS depth
-        FROM root_order r
+    IF is_comment_tree THEN
+      EXECUTE format($sql$
+        WITH RECURSIVE
+        root_order AS (
+          SELECT c.id AS node_id,
+                 ROW_NUMBER() OVER (ORDER BY c.id)::bigint AS ord
+          FROM %I.%I c
+          JOIN %I.%I e
+                ON e.start_id = c.id
+          LEFT JOIN %I.%I p
+                ON p.id = e.end_id
+          WHERE p.id IS NULL
+        ),
+        child_order AS (
+          SELECT e.end_id AS parent_id,
+                 e.start_id AS child_id,
+                 ROW_NUMBER() OVER (PARTITION BY e.end_id ORDER BY e.start_id)::bigint AS ord
+          FROM %I.%I e
+          JOIN %I.%I p
+                ON p.id = e.end_id
+        ),
+        walk AS (
+          SELECT r.node_id AS id,
+                 ARRAY[r.ord]::bigint[] AS path,
+                 0::integer AS depth
+          FROM root_order r
 
-        UNION ALL
+          UNION ALL
 
-        SELECT co.child_id AS id,
-           w.path || co.ord,
-           w.depth + 1 AS depth
-        FROM walk w
-        JOIN child_order co
-          ON co.parent_id = w.id
-      ),
-      events AS (
-        SELECT id, path AS ord_path, 0 AS is_exit
-        FROM walk
-        UNION ALL
-        SELECT id, path || ARRAY[9223372036854775807::bigint] AS ord_path, 1 AS is_exit
-        FROM walk
-      ),
-      numbered AS (
-        SELECT id,
-               is_exit,
-               ROW_NUMBER() OVER (ORDER BY ord_path) AS idx
-        FROM events
-      ),
-      prepost AS (
-        SELECT id,
-               MIN(depth) AS depth,
-               MIN(idx) FILTER (WHERE is_exit = 0) AS pre,
-               MIN(idx) FILTER (WHERE is_exit = 1) AS post
-        FROM numbered
-        JOIN walk USING (id)
-        GROUP BY id
-      )
-      UPDATE %I.%I c
-      SET pre = p.pre,
-          post = p.post,
-          depth = p.depth
-      FROM prepost p
-      WHERE p.id = c.id;
-    $sql$, gname, node_tbl, gname, edge_tbl, gname, edge_tbl, gname, node_tbl);
+          SELECT co.child_id AS id,
+                 w.path || co.ord,
+                 w.depth + 1 AS depth
+          FROM walk w
+          JOIN child_order co
+            ON co.parent_id = w.id
+        ),
+        events AS (
+          SELECT id, path AS ord_path, 0 AS is_exit
+          FROM walk
+          UNION ALL
+          SELECT id, path || ARRAY[9223372036854775807::bigint] AS ord_path, 1 AS is_exit
+          FROM walk
+        ),
+        numbered AS (
+          SELECT id,
+                 is_exit,
+                 ROW_NUMBER() OVER (ORDER BY ord_path) AS idx
+          FROM events
+        ),
+        prepost AS (
+          SELECT id,
+                 MIN(depth) AS depth,
+                 MIN(idx) FILTER (WHERE is_exit = 0) AS pre,
+                 MIN(idx) FILTER (WHERE is_exit = 1) AS post
+          FROM numbered
+          JOIN walk USING (id)
+          GROUP BY id
+        )
+        UPDATE %I.%I c
+        SET pre = p.pre,
+            post = p.post,
+            depth = p.depth
+        FROM prepost p
+        WHERE p.id = c.id;
+      $sql$, gname, node_tbl, gname, edge_tbl, gname, node_tbl, gname, edge_tbl, gname, node_tbl, gname, node_tbl);
+    ELSE
+      EXECUTE format($sql$
+        WITH RECURSIVE
+        root_order AS (
+          SELECT c.id AS node_id,
+                 ROW_NUMBER() OVER (ORDER BY c.id)::bigint AS ord
+          FROM %I.%I c
+          LEFT JOIN %I.%I e
+                ON e.start_id = c.id
+          WHERE e.start_id IS NULL
+        ),
+        child_order AS (
+           SELECT e.end_id AS parent_id,
+             e.start_id AS child_id,
+             ROW_NUMBER() OVER (PARTITION BY e.end_id ORDER BY e.start_id)::bigint AS ord
+           FROM %I.%I e
+        ),
+        walk AS (
+          SELECT r.node_id AS id,
+             ARRAY[r.ord]::bigint[] AS path,
+             0::integer AS depth
+          FROM root_order r
+
+          UNION ALL
+
+          SELECT co.child_id AS id,
+             w.path || co.ord,
+             w.depth + 1 AS depth
+          FROM walk w
+          JOIN child_order co
+            ON co.parent_id = w.id
+        ),
+        events AS (
+          SELECT id, path AS ord_path, 0 AS is_exit
+          FROM walk
+          UNION ALL
+          SELECT id, path || ARRAY[9223372036854775807::bigint] AS ord_path, 1 AS is_exit
+          FROM walk
+        ),
+        numbered AS (
+          SELECT id,
+                 is_exit,
+                 ROW_NUMBER() OVER (ORDER BY ord_path) AS idx
+          FROM events
+        ),
+        prepost AS (
+          SELECT id,
+                 MIN(depth) AS depth,
+                 MIN(idx) FILTER (WHERE is_exit = 0) AS pre,
+                 MIN(idx) FILTER (WHERE is_exit = 1) AS post
+          FROM numbered
+          JOIN walk USING (id)
+          GROUP BY id
+        )
+        UPDATE %I.%I c
+        SET pre = p.pre,
+            post = p.post,
+            depth = p.depth
+        FROM prepost p
+        WHERE p.id = c.id;
+      $sql$, gname, node_tbl, gname, edge_tbl, gname, edge_tbl, gname, node_tbl);
+    END IF;
 
     EXECUTE format(
       'CREATE INDEX IF NOT EXISTS %I ON %I.%I (depth, pre)',

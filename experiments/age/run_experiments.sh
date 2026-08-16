@@ -14,6 +14,8 @@ Options:
 	                     Examples: 01,02 or 01_foo.sql,02_bar.sql or 0* (glob).
 	-d, --datasets LIST  Comma-separated dataset/base names or graph names to run.
 	                     Examples: snb_sf1_comment,artificial_trees_truebase_100 or snb* (glob).
+	-s, --scenarios LIST Comma-separated scenario names to run (globs allowed).
+	                     Examples: q03,q04,q05 or q0?.
 	-n, --note TEXT      Optional note text to append to notes.txt for this run.
 	-w, --warmup         Run one warmup execution per query before measurements.
 	-r, --runs N         Number of measurement runs per query (default: 1).
@@ -22,11 +24,13 @@ Options:
 	--save-plans         After runs, save one EXPLAIN ANALYZE plan per graph/query.
 	--save-results       After runs, save one result output per graph/query.
 	--save-queries       Persist rendered queries output (default: off).
+	--parameters-file F  CSV file with graph/query/scenario parameters.
 	-h, --help           Show this help.
 
 ENV:
 	QUERY_FILTER         Same as --queries / -q; CLI overrides ENV.
 	DATASET_FILTER       Same as --datasets; CLI overrides ENV.
+	SCENARIO_FILTER      Same as --scenarios / -s; CLI overrides ENV.
 	WARMUP               If set to 1, run one warmup execution per query.
 	RUNS                 Number of measurement runs per query.
 	SAVE_PLANS           If set to 1, save one EXPLAIN ANALYZE plan.
@@ -34,6 +38,7 @@ ENV:
 	SAVE_QUERIES         If set to 1, persist queries output (default: 0).
 	TIMING_OFF           If set to 1, use TIMING OFF for EXPLAIN ANALYZE.
 	TIMEOUT_MS           Same as --timeout-ms; CLI overrides ENV.
+	PARAMETERS_FILE      Same as --parameters-file; defaults to query_parameters.csv next to this script.
 	NOTE                 Optional note text (same as --note).
 EOF
 }
@@ -53,6 +58,7 @@ QUERIES_DIR="${OUTPUT_DIR}/queries"
 
 QUERY_FILTER="${QUERY_FILTER:-}"
 DATASET_FILTER="${DATASET_FILTER:-}"
+SCENARIO_FILTER="${SCENARIO_FILTER:-}"
 NOTE="${NOTE:-}"
 WARMUP="${WARMUP:-0}"
 RUNS="${RUNS:-1}"
@@ -61,6 +67,7 @@ SAVE_RESULTS="${SAVE_RESULTS:-0}"
 SAVE_QUERIES="${SAVE_QUERIES:-0}"
 TIMEOUT_MS="${TIMEOUT_MS:-3600000}"
 TIMING_OFF="${TIMING_OFF:-0}"
+PARAMETERS_FILE="${PARAMETERS_FILE:-${SCRIPT_DIR}/query_parameters.csv}"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -70,6 +77,10 @@ while [[ $# -gt 0 ]]; do
 			;;
 		-d|--datasets)
 			DATASET_FILTER="${2:-}"
+			shift 2
+			;;
+		-s|--scenarios)
+			SCENARIO_FILTER="${2:-}"
 			shift 2
 			;;
 		-n|--note)
@@ -108,6 +119,10 @@ while [[ $# -gt 0 ]]; do
 			TIMING_OFF=1
 			shift
 			;;
+		--parameters-file)
+			PARAMETERS_FILE="${2:-}"
+			shift 2
+			;;
 		-h|--help)
 			usage
 			exit 0
@@ -142,6 +157,11 @@ fi
 
 if [[ "$SAVE_RESULTS" != "0" && "$SAVE_RESULTS" != "1" ]]; then
 	echo "Invalid SAVE_RESULTS value: $SAVE_RESULTS (expected 0 or 1)" >&2
+	exit 1
+fi
+
+if [[ ! -f "$PARAMETERS_FILE" ]]; then
+	echo "Parameter CSV not found: $PARAMETERS_FILE" >&2
 	exit 1
 fi
 
@@ -224,7 +244,7 @@ if [ "$SAVE_RESULTS" -eq 1 ]; then
 	mkdir -p "$RESULT_DIR"
 	echo "# empty results" > "$EMPTY_RESULTS_LOG"
 fi
-echo "graph,query,run,runtime_ms" > "$CSV_FILE"
+echo "graph,query,scenario,run,runtime_ms" > "$CSV_FILE"
 
 readarray -t GRAPHS < <("${PSQL_BASE[@]}" -c "SELECT name FROM ag_catalog.ag_graph ORDER BY name;")
 
@@ -284,15 +304,15 @@ resolve_labels_for_graph() {
 	case "$tree_key" in
 		comment)
 			expected_node="Comment"
-			expected_edge="comment_replyOf_comment"
+			expected_edge="REPLY_OF"
 			;;
 		place)
 			expected_node="Place"
-			expected_edge="place_isPartOf_place"
+			expected_edge="IS_PART_OF"
 			;;
 		tagclass)
-			expected_node="Tagclass"
-			expected_edge="tagclass_isSubclassOf_tagclass"
+			expected_node="TagClass"
+			expected_edge="IS_SUBCLASS_OF"
 			;;
 		*)
 			echo ""
@@ -311,87 +331,101 @@ escape_sql_literal() {
 	echo "$1" | sed "s/'/''/g"
 }
 
-resolve_rootid() {
-	local graph="$1"
-	local graph_lc
-	graph_lc="${graph,,}"
+declare -A QUERY_PARAMETERS
+declare -A QUERY_SCENARIOS
 
-	if [[ "$graph_lc" == *_tagclass_* ]]; then
-		echo "1"
-	elif [[ "$graph_lc" == *_place_* ]]; then
-		echo "1455"
-	elif [[ "$graph_lc" == *snb* ]]; then
-		echo "1374390095024"
-	elif [[ "$graph_lc" == *artificial_forests* ]]; then
-		echo "2"
-	else
-		echo "1"
-	fi
+matches_scenario_filter() {
+	local scenario="$1"
+	local token
+	local -a scenario_tokens
+
+	[[ -z "$SCENARIO_FILTER" ]] && return 0
+	IFS=',' read -r -a scenario_tokens <<< "$SCENARIO_FILTER"
+	for token in "${scenario_tokens[@]}"; do
+		token="${token//[[:space:]]/}"
+		[[ -z "$token" ]] && continue
+		if [[ "$scenario" == $token ]]; then
+			return 0
+		fi
+	done
+	return 1
 }
 
-resolve_ancestor_ids() {
-	local graph="$1"
-	local base
+load_query_parameters() {
+	local line_no=0 graph query scenario parameter value extra key scenario_key
+	local header
+	IFS= read -r header < "$PARAMETERS_FILE" || true
+	if [[ "$header" != "graph,query,scenario,parameter,value" ]]; then
+		echo "Invalid parameter CSV header in $PARAMETERS_FILE (expected graph,query,scenario,parameter,value)" >&2
+		exit 1
+	fi
 
-	base="$graph"
-	base="${base%_baseline}"
+	while IFS=',' read -r graph query scenario parameter value extra; do
+		((++line_no))
+		graph="${graph//$'\r'/}"
+		scenario="${scenario//$'\r'/}"
+		value="${value//$'\r'/}"
+		[[ -z "$graph" ]] && continue
+		if [[ -n "$extra" || -z "$query" || ! "$scenario" =~ ^[A-Za-z0-9_-]+$ || ! "$parameter" =~ ^(rootid|id1|id2)$ || ! "$value" =~ ^[0-9]+$ ]]; then
+			echo "Invalid parameter CSV row $((line_no + 1)) in $PARAMETERS_FILE" >&2
+			exit 1
+		fi
+		key="${graph}|${query}|${scenario}|${parameter}"
+		if [[ -n "${QUERY_PARAMETERS[$key]+x}" ]]; then
+			echo "Duplicate parameter CSV entry for graph=$graph query=$query scenario=$scenario parameter=$parameter" >&2
+			exit 1
+		fi
+		QUERY_PARAMETERS["$key"]="$value"
+		scenario_key="${graph}|${query}|${scenario}"
+		QUERY_SCENARIOS["$scenario_key"]=1
+	done < <(tail -n +2 "$PARAMETERS_FILE")
+}
+
+resolve_query_parameter_scenarios() {
+	local graph="$1"
+	local query_file="$2"
+	local base query scenario scenario_key key rootid id1 id2
+	base="${graph%_baseline}"
 	base="${base%_dewey}"
 	base="${base%_prepost}"
-
-	case "$base" in
-		artificial_forests_40)
-			echo "4|7"
-			;;
-		artificial_trees_truebase_10)
-			echo "2|8"
-			;;
-		artificial_trees_truebase_100)
-			echo "3|86"
-			;;
-		artificial_trees_truebase_1000)
-			echo "3|901"
-			;;
-		artificial_trees_truebase_10000)
-			echo "4|8065"
-			;;
-		artificial_trees_ultratall_10)
-			echo "2|9"
-			;;
-		artificial_trees_ultratall_100)
-			echo "2|48"
-			;;
-		artificial_trees_ultratall_1000)
-			echo "2|961"
-			;;
-		artificial_trees_ultratall_10000)
-			echo "4|7043"
-			;;
-		artificial_trees_ultrawide_10)
-			echo "2|8"
-			;;
-		artificial_trees_ultrawide_100)
-			echo "4|60"
-			;;
-		artificial_trees_ultrawide_1000)
-			echo "4|867"
-			;;
-		artificial_trees_ultrawide_10000)
-			echo "2|8782"
-			;;
-		snb_sf1_comment)
-			echo "549757114012|549757114029"
-			;;
-		snb_sf1_place)
-			echo "1455|548"
-			;;
-		snb_sf1_tagclass)
-			echo "240|47"
-			;;
-		*)
-			echo "1|2"
-			;;
-	esac
+	base="${base%_treenode}"
+	query="${query_file%.sql}"
+	for scenario_key in "${!QUERY_SCENARIOS[@]}"; do
+		[[ "$scenario_key" == "${base}|${query}|"* ]] || continue
+		scenario="${scenario_key##*|}"
+		matches_scenario_filter "$scenario" || continue
+		rootid="${QUERY_PARAMETERS[${base}|${query}|${scenario}|rootid]-}"
+		id1="${QUERY_PARAMETERS[${base}|${query}|${scenario}|id1]-}"
+		id2="${QUERY_PARAMETERS[${base}|${query}|${scenario}|id2]-}"
+		case "$query" in
+			01_all_descendants|02_all_children|05_all_leaves)
+				[[ -n "$rootid" ]] || continue
+				;;
+			11_check_if_ancestor)
+				[[ -n "$id1" && -n "$id2" ]] || continue
+				;;
+			*) continue ;;
+		esac
+		printf '%s|%s|%s|%s\n' "$scenario" "$rootid" "$id1" "$id2"
+	done | sort -t '|' -k2,4 -k1,1 | awk -F '|' '
+		{
+			key = $2 FS $3 FS $4
+			if (key in scenario_names) {
+				scenario_names[key] = scenario_names[key] "_" $1
+			} else {
+				scenario_names[key] = $1
+				parameter_values[key] = $2 FS $3 FS $4
+			}
+		}
+		END {
+			for (key in parameter_values) {
+				print scenario_names[key] "|" parameter_values[key]
+			}
+		}
+	' | sort
 }
+
+load_query_parameters
 
 declare -A HINT_SAVED_KEYS
 
@@ -399,6 +433,7 @@ persist_hinted_query() {
 	local graph="$1"
 	local full_path="$2"
 	local hinted_sql_file="$3"
+	local scenario="$4"
 	local query_name
 	local query_set
 	local graph_safe
@@ -413,8 +448,8 @@ persist_hinted_query() {
 	query_name="$(basename "$full_path")"
 	query_set="$(basename "$(dirname "$full_path")")"
 	graph_safe="$(echo "$graph" | tr '/\\: ' '____')"
-	query_safe="$(echo "${query_set}__${query_name}" | tr '/\\: ' '____')"
-	key="${graph}|${query_set}|${query_name}"
+	query_safe="$(echo "${query_set}__${query_name}__${scenario}" | tr '/\\: ' '____')"
+	key="${graph}|${query_set}|${query_name}|${scenario}"
 	if [[ -n "${HINT_SAVED_KEYS[$key]+x}" ]]; then
 		return
 	fi
@@ -565,19 +600,13 @@ render_query_template() {
 	local rootid="$5"
 	local graph="$6"
 	local query_set="$7"
-	local id1="$rootid"
-	local id2="$rootid"
+	local id1="$8"
+	local id2="$9"
+	local scenario="${10}"
 	local query_file_name
 	local raw_file
 
 	query_file_name="$(basename "$full_path")"
-	if [[ "$query_file_name" == "11_check_if_ancestor.sql" ]]; then
-		local ancestor_ids
-		ancestor_ids="$(resolve_ancestor_ids "$graph")"
-		id1="${ancestor_ids%%|*}"
-		id2="${ancestor_ids##*|}"
-	fi
-
 	raw_file="$(mktemp)"
 	local aliased_file
 	aliased_file="$(mktemp)"
@@ -611,7 +640,7 @@ render_query_template() {
 	else
 		cp "$hinted_file" "$out_file"
 	fi
-	persist_hinted_query "$graph" "$full_path" "$out_file"
+	persist_hinted_query "$graph" "$full_path" "$out_file" "$scenario"
 	rm -f "$raw_file" "$aliased_file" "$hinted_file"
 }
 
@@ -681,11 +710,14 @@ run_warmup() {
 	local query_set="$5"
 	local query_file="$6"
 	local query_root="$7"
+	local id1="$8"
+	local id2="$9"
+	local scenario="${10}"
 
 	local full_path="$query_root/$query_set/$query_file"
 	local tmpfile
 	tmpfile="$(mktemp)"
-	render_query_template "$full_path" "$tmpfile" "$nodetype" "$reltype" "$rootid" "$graph" "$query_set"
+	render_query_template "$full_path" "$tmpfile" "$nodetype" "$reltype" "$rootid" "$graph" "$query_set" "$id1" "$id2" "$scenario"
 
 	measure_psql_timing_ms_null "$tmpfile" "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" >/dev/null 2>&1 || true
 
@@ -701,13 +733,16 @@ run_plan() {
 	local query_file="$6"
 	local query_root="$7"
 	local explain_mode="${8:-analyze}"
+	local id1="$9"
+	local id2="${10}"
+	local scenario="${11}"
 	local query_base
 	query_base="${query_file%.sql}"
 
 	local full_path="$query_root/$query_set/$query_file"
 	local tmpfile
 	tmpfile="$(mktemp)"
-	render_query_template "$full_path" "$tmpfile" "$nodetype" "$reltype" "$rootid" "$graph" "$query_set"
+	render_query_template "$full_path" "$tmpfile" "$nodetype" "$reltype" "$rootid" "$graph" "$query_set" "$id1" "$id2" "$scenario"
 	local exec_file
 	exec_file="$(mktemp)"
 	prepare_execution_query "$tmpfile" "$exec_file" "$query_set"
@@ -717,9 +752,9 @@ run_plan() {
 	build_explain_script "$exec_file" "$explain_file" "$explain_mode"
 
 	local err_file
-	err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_base}_plan").log"
+	err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_base}_${scenario}_plan").log"
 	local plan_file
-	plan_file="$PLAN_DIR/$(escape_filename "${graph}_${query_set}_${query_base}").plan.txt"
+	plan_file="$PLAN_DIR/$(escape_filename "${graph}_${query_set}_${query_base}_${scenario}").plan.txt"
 	local plan_err
 	plan_err="$(mktemp)"
 
@@ -756,21 +791,24 @@ run_results() {
 	local query_set="$5"
 	local query_file="$6"
 	local query_root="$7"
+	local id1="$8"
+	local id2="$9"
+	local scenario="${10}"
 	local query_base
 	query_base="${query_file%.sql}"
 
 	local full_path="$query_root/$query_set/$query_file"
 	local tmpfile
 	tmpfile="$(mktemp)"
-	render_query_template "$full_path" "$tmpfile" "$nodetype" "$reltype" "$rootid" "$graph" "$query_set"
+	render_query_template "$full_path" "$tmpfile" "$nodetype" "$reltype" "$rootid" "$graph" "$query_set" "$id1" "$id2" "$scenario"
 	local exec_file
 	exec_file="$(mktemp)"
 	prepare_execution_query "$tmpfile" "$exec_file" "$query_set"
 
 	local err_file
-	err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_base}_result").log"
+	err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_base}_${scenario}_result").log"
 	local result_file
-	result_file="$RESULT_DIR/$(escape_filename "${graph}_${query_set}_${query_base}").results.txt"
+	result_file="$RESULT_DIR/$(escape_filename "${graph}_${query_set}_${query_base}_${scenario}").results.txt"
 	local query_err
 	query_err="$(mktemp)"
 
@@ -799,6 +837,7 @@ run_results() {
 	if [ ! -s "$result_file" ]; then
 		echo "graph=$graph" >> "$EMPTY_RESULTS_LOG"
 		echo "query=${query_set}/${query_file}" >> "$EMPTY_RESULTS_LOG"
+		echo "scenario=$scenario" >> "$EMPTY_RESULTS_LOG"
 		echo "result=$result_file" >> "$EMPTY_RESULTS_LOG"
 		echo "" >> "$EMPTY_RESULTS_LOG"
 	fi
@@ -883,12 +922,13 @@ fi
 total_jobs=0
 for base in "${BASES[@]}"; do
 	for query_file in "${QUERY_FILES[@]}"; do
+		mapfile -t parameter_scenarios < <(resolve_query_parameter_scenarios "${base}_baseline" "$query_file")
 		for graph in \
 			"${base}_baseline" \
 			"${base}_dewey" \
 			"${base}_prepost"; do
 			if [[ -n "${graph_map[$graph]+x}" ]]; then
-				((total_jobs+=1))
+				((total_jobs+=${#parameter_scenarios[@]}))
 			fi
 		done
 	done
@@ -898,7 +938,8 @@ echo "Starting AGE experiments"
 echo "  Output directory: $OUTPUT_DIR"
 echo "  Datasets selected: ${#BASES[@]}"
 echo "  Queries selected: ${#QUERY_FILES[@]}"
-echo "  Total graph-query jobs: $total_jobs"
+echo "  Scenario filter: ${SCENARIO_FILTER:-<none>}"
+echo "  Total graph-query-scenario jobs: $total_jobs"
 
 if [ "$total_jobs" -eq 0 ]; then
 	echo "Nothing to run: no matching graph/query combinations found." >&2
@@ -927,11 +968,15 @@ for base in "${BASES[@]}"; do
 				continue
 			fi
 
-			((current_job+=1))
-
 			query_root="$QUERY_ROOT"
 
-			rootid="$(resolve_rootid "$graph")"
+			mapfile -t parameter_scenarios < <(resolve_query_parameter_scenarios "$graph" "$query_file")
+			if [[ "${#parameter_scenarios[@]}" -eq 0 ]]; then
+				err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_file%.sql}_parameters").log"
+				printf "No complete parameter scenario for graph=%s query=%s in %s\n" "$graph" "${query_file%.sql}" "$PARAMETERS_FILE" > "$err_file"
+				echo "graph=$graph query=${query_file%.sql} skipped (missing parameter scenarios)" >&2
+				continue
+			fi
 
 			readarray -t node_labels < <(get_label "$graph" "v")
 			readarray -t edge_labels < <(get_label "$graph" "e")
@@ -958,8 +1003,16 @@ for base in "${BASES[@]}"; do
 				continue
 			fi
 
+			for params in "${parameter_scenarios[@]}"; do
+				((current_job+=1))
+				scenario=""
+				rootid=""
+				id1=""
+				id2=""
+				IFS='|' read -r scenario rootid id1 id2 <<< "$params"
+
 			if [ "$WARMUP" -eq 1 ]; then
-				run_warmup "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root"
+				run_warmup "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root" "$id1" "$id2" "$scenario"
 			fi
 
 			runs_ok=0
@@ -969,31 +1022,31 @@ for base in "${BASES[@]}"; do
 			for ((run_idx=1; run_idx<=RUNS; run_idx++)); do
 				local_tmpfile="$(mktemp)"
 				full_path="$query_root/$query_set/$query_file"
-				render_query_template "$full_path" "$local_tmpfile" "$nodetype" "$reltype" "$rootid" "$graph" "$query_set"
+				render_query_template "$full_path" "$local_tmpfile" "$nodetype" "$reltype" "$rootid" "$graph" "$query_set" "$id1" "$id2" "$scenario"
 
 				runtime=""
 				if runtime=$(measure_psql_timing_ms_null "$local_tmpfile" "$graph" "$nodetype" "$reltype" "$rootid" "$query_set"); then
 					((runs_ok+=1))
-					echo "${graph},${query_file%.sql},${run_idx},${runtime}" >> "$CSV_FILE"
+					echo "${graph},${query_file%.sql},${scenario},${run_idx},${runtime}" >> "$CSV_FILE"
 				else
 					rc=$?
 					((runs_failed+=1))
-					err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_file%.sql}_run${run_idx}").log"
+					err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_file%.sql}_${scenario}_run${run_idx}").log"
 					if [[ "$rc" -eq 124 ]]; then
 						echo "Query timed out after ${TIMEOUT_MS} ms." > "$err_file"
 					else
 						echo "Failed to measure timing." > "$err_file"
 					fi
-					echo "${graph},${query_file%.sql},${run_idx}," >> "$CSV_FILE"
+					echo "${graph},${query_file%.sql},${scenario},${run_idx}," >> "$CSV_FILE"
 
 					if [[ "$rc" -eq 124 && "$run_idx" -eq 1 ]]; then
 						timeout_on_first_run=1
 						if (( RUNS > 1 )); then
 							runs_skipped=$((RUNS - 1))
 							for ((skip_idx=2; skip_idx<=RUNS; skip_idx++)); do
-								skip_err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_file%.sql}_run${skip_idx}").log"
+								skip_err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_file%.sql}_${scenario}_run${skip_idx}").log"
 								echo "Skipped run ${skip_idx}: run 1 timed out after ${TIMEOUT_MS} ms." > "$skip_err_file"
-								echo "${graph},${query_file%.sql},${skip_idx}," >> "$CSV_FILE"
+								echo "${graph},${query_file%.sql},${scenario},${skip_idx}," >> "$CSV_FILE"
 							done
 						fi
 					fi
@@ -1009,13 +1062,13 @@ for base in "${BASES[@]}"; do
 			plan_status="off"
 			if [ "$SAVE_PLANS" -eq 1 ]; then
 				if [[ "$timeout_on_first_run" -eq 1 ]]; then
-					if run_plan "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root" "explain_only"; then
+					if run_plan "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root" "explain_only" "$id1" "$id2" "$scenario"; then
 						plan_status="saved(explain-only)"
 					else
 						plan_status="failed(explain-only)"
 					fi
 				else
-					if run_plan "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root"; then
+					if run_plan "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root" "analyze" "$id1" "$id2" "$scenario"; then
 						plan_status="saved"
 					else
 						plan_status="failed"
@@ -1025,18 +1078,19 @@ for base in "${BASES[@]}"; do
 
 			result_status="off"
 			if [ "$SAVE_RESULTS" -eq 1 ] && [[ "$timeout_on_first_run" -eq 0 ]]; then
-				if run_results "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root"; then
+				if run_results "$graph" "$nodetype" "$reltype" "$rootid" "$query_set" "$query_file" "$query_root" "$id1" "$id2" "$scenario"; then
 					result_status="saved"
 				else
 					result_status="failed"
 				fi
 			elif [ "$SAVE_RESULTS" -eq 1 ] && [[ "$timeout_on_first_run" -eq 1 ]]; then
-				err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_file%.sql}_result").log"
+				err_file="$ERROR_DIR/$(escape_filename "${graph}_${query_set}_${query_file%.sql}_${scenario}_result").log"
 				echo "Skipped result execution: run 1 timed out after ${TIMEOUT_MS} ms." > "$err_file"
 				result_status="skipped(timeout)"
 			fi
 
-			echo "[$current_job/$total_jobs] graph=$graph query_set=$query_set query=${query_file%.sql} runs_ok=$runs_ok runs_failed=$runs_failed runs_skipped=$runs_skipped plan=$plan_status result=$result_status"
+			echo "[$current_job/$total_jobs] graph=$graph query_set=$query_set query=${query_file%.sql} scenario=$scenario runs_ok=$runs_ok runs_failed=$runs_failed runs_skipped=$runs_skipped plan=$plan_status result=$result_status"
+			done
 		done
 	done
 done

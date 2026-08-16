@@ -25,6 +25,44 @@ strip_numbers() {
   echo "$1" | sed -E 's/([._-]?[0-9]+)+$//g'
 }
 
+normalize_key() {
+  echo "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+merge_edge_csvs_for_label() {
+  local target_label="$1"
+  local temp_dir="$2"
+  shift 2
+
+  local merged_path="${temp_dir}/${target_label}.csv"
+  local first_file=1
+  local file current_label
+
+  rm -f "$merged_path"
+
+  for file in "$@"; do
+    current_label="$(edge_label_from_file "$file")"
+    if [[ "$current_label" != "$target_label" ]]; then
+      continue
+    fi
+
+    if [[ $first_file -eq 1 ]]; then
+      awk 'NR == 1 { print; next } { gsub(/Tagclass/, "TagClass"); print }' "$file" > "$merged_path"
+      first_file=0
+    else
+      awk 'NR > 1 { gsub(/Tagclass/, "TagClass"); print }' "$file" >> "$merged_path"
+    fi
+  done
+
+  if [[ $first_file -eq 1 ]]; then
+    rm -f "$merged_path"
+    return 1
+  fi
+
+  chmod 0644 "$merged_path"
+  echo "$merged_path"
+}
+
 node_label_from_file() {
   local filename="$1"
   local base
@@ -41,24 +79,53 @@ node_label_from_file() {
     return
   fi
 
-  echo "${label_raw^}"
+  case "${label_raw,,}" in
+    comment) echo "Comment" ;;
+    forum) echo "Forum" ;;
+    organisation) echo "Organisation" ;;
+    person) echo "Person" ;;
+    post) echo "Post" ;;
+    tag) echo "Tag" ;;
+    place) echo "Place" ;;
+    tagclass) echo "TagClass" ;;
+    *) echo "${label_raw^}" ;;
+  esac
 }
 
 edge_label_from_file() {
   local filename="$1"
   local base
   local label_raw
+  local label_key
 
   base="$(basename "$filename")"
   base="$(echo "$base" | sed -E 's/\.[cC][sS][vV]$//')"
   label_raw="$(strip_numbers "$base")"
+  label_key="$(normalize_key "$label_raw")"
 
-  if [[ -z "$label_raw" ]]; then
+  if [[ -z "$label_key" ]]; then
     echo ""
     return
   fi
 
-  echo "$label_raw"
+  case "$label_key" in
+    comment_hascreator_person|post_hascreator_person) echo "HAS_CREATOR" ;;
+    comment_hastag_tag|forum_hastag_tag|post_hastag_tag) echo "HAS_TAG" ;;
+    comment_islocatedin_place|organisation_islocatedin_place|person_islocatedin_place|post_islocatedin_place) echo "IS_LOCATED_IN" ;;
+    comment_replyof_comment|comment_replyof_post) echo "REPLY_OF" ;;
+    forum_containerof_post) echo "CONTAINER_OF" ;;
+    forum_hasmember_person) echo "HAS_MEMBER" ;;
+    forum_hasmoderator_person) echo "HAS_MODERATOR" ;;
+    person_hasinterest_tag) echo "HAS_INTEREST" ;;
+    person_knows_person) echo "KNOWS" ;;
+    person_likes_comment|person_likes_post) echo "LIKES" ;;
+    person_studyat_organisation) echo "STUDY_AT" ;;
+    person_workat_organisation) echo "WORK_AT" ;;
+    place_ispartof_place) echo "IS_PART_OF" ;;
+    tag_hastype_tagclass) echo "HAS_TYPE" ;;
+    tagclass_issubclassof_tagclass) echo "IS_SUBCLASS_OF" ;;
+    *) echo "$label_raw" ;;
+  esac
 }
 
 trim() {
@@ -131,14 +198,20 @@ load_graph_from_csv() {
   local graph_name="$1"
   local data_dir="$2"
   local node_dir edge_dir
-  local file label_name
+  local file label_name load_file temp_dir
   local node_files_found=0
   local edge_files_found=0
   local node_files_loaded=0
   local edge_files_loaded=0
+  local -a edge_files edge_labels
+  local -A edge_label_seen=()
 
   node_dir="$data_dir/nodes"
   edge_dir="$data_dir/edges"
+  temp_dir="$(mktemp -d /tmp/age_treebench_edges.XXXXXX)"
+  chmod 0755 "$temp_dir"
+
+  trap 'rm -rf "$temp_dir"' RETURN
 
   echo "[20-load] CSV->graph source_graph=$graph_name data_dir=$data_dir via $(basename "$SQL_FILE")"
 
@@ -147,10 +220,10 @@ load_graph_from_csv() {
     include_node_file_for_age "$(basename "$file")" || continue
     node_files_found=$((node_files_found + 1))
   done
-  for file in "$edge_dir"/*.csv; do
-    [[ -e "$file" ]] || break
-    edge_files_found=$((edge_files_found + 1))
-  done
+  shopt -s nullglob
+  edge_files=("$edge_dir"/*.csv)
+  shopt -u nullglob
+  edge_files_found=${#edge_files[@]}
 
   echo "[20-load] source_graph=$graph_name discovered node_csv=$node_files_found edge_csv=$edge_files_found"
 
@@ -177,15 +250,24 @@ load_graph_from_csv() {
     node_files_loaded=$((node_files_loaded + 1))
   done
 
-  for file in "$edge_dir"/*.csv; do
-    [[ -e "$file" ]] || break
-
+  for file in "${edge_files[@]}"; do
     label_name="$(edge_label_from_file "$file")"
     if [[ -z "$label_name" ]]; then
       echo "Skipping edge file (empty label): $file"
       continue
     fi
-    echo "[20-load] loading edge label=$label_name file=$file graph=$graph_name"
+    if [[ -n "${edge_label_seen[$label_name]+x}" ]]; then
+      continue
+    fi
+
+    edge_label_seen["$label_name"]=1
+    edge_labels+=("$label_name")
+  done
+
+  for label_name in "${edge_labels[@]}"; do
+    load_file="$(merge_edge_csvs_for_label "$label_name" "$temp_dir" "${edge_files[@]}")"
+
+    echo "[20-load] loading edge label=$label_name file=$load_file graph=$graph_name"
 
     psql -v ON_ERROR_STOP=1 \
       --echo-errors \
@@ -194,7 +276,7 @@ load_graph_from_csv() {
       -v graph_name="$graph_name" \
       -v label_kind="e" \
       -v label_name="$label_name" \
-      -v file_path="$file" \
+      -v file_path="$load_file" \
       -f "$SQL_FILE"
     edge_files_loaded=$((edge_files_loaded + 1))
   done
