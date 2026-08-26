@@ -12,7 +12,7 @@ services:
       - ./init:/app/init:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "test -f /kuzu_data/.initialized"]
+      test: ["CMD-SHELL", "test -f /kuzu_data/.initialized && test -f /kuzu_data/max_depths.json"]
       interval: 10s
       timeout: 5s
       retries: 30

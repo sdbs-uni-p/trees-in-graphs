@@ -38,7 +38,7 @@ ENV:
 	SAVE_QUERIES         If set to 1, persist queries output (default: 0).
 	TIMING_OFF           If set to 1, use TIMING OFF for EXPLAIN ANALYZE.
 	TIMEOUT_MS           Same as --timeout-ms; CLI overrides ENV.
-	PARAMETERS_FILE      Same as --parameters-file; defaults to query_parameters.csv next to this script.
+	PARAMETERS_FILE      Same as --parameters-file; defaults to experiments/query_parameters.csv.
 	NOTE                 Optional note text (same as --note).
 EOF
 }
@@ -67,7 +67,7 @@ SAVE_RESULTS="${SAVE_RESULTS:-0}"
 SAVE_QUERIES="${SAVE_QUERIES:-0}"
 TIMEOUT_MS="${TIMEOUT_MS:-3600000}"
 TIMING_OFF="${TIMING_OFF:-0}"
-PARAMETERS_FILE="${PARAMETERS_FILE:-${SCRIPT_DIR}/query_parameters.csv}"
+PARAMETERS_FILE="${PARAMETERS_FILE:-${SCRIPT_DIR}/../query_parameters.csv}"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in

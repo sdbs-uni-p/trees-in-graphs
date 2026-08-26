@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 import os
+import json
 import time
 from abc import abstractmethod, ABC
 import re
@@ -138,10 +139,10 @@ class ApacheExecutor(Executor):
 
     def collect_id(self, annotation: str | int, node_type: str, graph_name : str) -> int:
         if type(annotation) is str:
-            annotation_type = "string_id"
+            annotation_type = "dewey"
             annotation_value = f"'{annotation}'"
         else:
-            annotation_type = "integer_id"
+            annotation_type = "pre"
             annotation_value = str(annotation)
 
         query_string = f"""SELECT id::bigint
@@ -157,10 +158,10 @@ $$) AS (id agtype);"""
 
     def create_ir_index(self, node_type: str, graph_name: str):
         # Direct SQL
-#        ir_index_command = f"""CREATE UNIQUE INDEX treenode_integer_id_unique_idx
+#        ir_index_command = f"""CREATE UNIQUE INDEX treenode_pre_unique_idx
 #ON {graph_name}."{node_type}"
 #USING BTREE (
-#  agtype_access_operator(VARIADIC ARRAY[properties, '"integer_id"'::agtype])
+#  agtype_access_operator(VARIADIC ARRAY[properties, '"pre"'::agtype])
 #);
 #"""
 #        self.execute_query(ir_index_command)
@@ -168,13 +169,13 @@ $$) AS (id agtype);"""
 #        # Through cypher
 #        ir_index_command = f"""SELECT *
 #FROM cypher('{graph_name}', $$
-#    CREATE INDEX IF NOT EXISTS treenode_integer_id_idx
-#    ON :{node_type}(integer_id);
+#    CREATE INDEX IF NOT EXISTS treenode_pre_idx
+#    ON :{node_type}(pre);
 #$$) AS (ignored agtype);"""
-        ir_index_command = f"""CREATE INDEX IF NOT EXISTS treenode_integer_id_btree
+        ir_index_command = f"""CREATE INDEX IF NOT EXISTS treenode_pre_btree
 ON {graph_name}."{node_type}"
 USING BTREE (
-  agtype_access_operator(VARIADIC ARRAY[properties, '"integer_id"'::agtype])
+  agtype_access_operator(VARIADIC ARRAY[properties, '"pre"'::agtype])
 );
 """
 
@@ -200,30 +201,30 @@ USING BTREE (
 #        self.execute_query(s_setup)
 
         # Trigram
-#        s_index_command = f"""CREATE INDEX treenode_string_id_trgm_idx
+#        s_index_command = f"""CREATE INDEX treenode_dewey_trgm_idx
 #ON {graph_name}."{node_type}"
 #USING GIN (
-#  (agtype_access_operator(VARIADIC ARRAY[properties, '"string_id"'::agtype])) gin_trgm_ops
+#  (agtype_access_operator(VARIADIC ARRAY[properties, '"dewey"'::agtype])) gin_trgm_ops
 #);"""
 
         # SQL w/ Textops
-#        s_index_command = f"""CREATE INDEX treenode_string_id_prefix_idx
+#        s_index_command = f"""CREATE INDEX treenode_dewey_prefix_idx
 #ON {graph_name}."{node_type}"
 #USING BTREE (
-# (agtype_access_operator(VARIADIC ARRAY[properties, '"string_id"'::agtype])) text_pattern_ops
+# (agtype_access_operator(VARIADIC ARRAY[properties, '"dewey"'::agtype])) text_pattern_ops
 #);"""
 #        self.execute_query(s_index_command)
         # Cypher
 #        s_index_command = f"""SELECT *
 #FROM cypher('{graph_name}', $$
-#    CREATE INDEX treenode_string_id_idx
-#    ON :{node_type}(string_id);
+#    CREATE INDEX treenode_dewey_idx
+#    ON :{node_type}(dewey);
 #$$) AS (ignored agtype);"""
 
-        s_index_command = f"""CREATE INDEX IF NOT EXISTS treenode_string_id_prefix_idx
+        s_index_command = f"""CREATE INDEX IF NOT EXISTS treenode_dewey_prefix_idx
 ON {graph_name}."{node_type}"
 USING BTREE (
-  (agtype_access_operator(VARIADIC ARRAY[properties, '"string_id"'::agtype])::text) text_pattern_ops
+  (agtype_access_operator(VARIADIC ARRAY[properties, '"dewey"'::agtype])::text) text_pattern_ops
 );
 """
 
@@ -238,20 +239,20 @@ USING BTREE (
 
     def drop_ir_index(self, node_type: str, graph_name: str):
         self.execute_command(
-            f'DROP INDEX IF EXISTS {graph_name}.treenode_integer_id_unique_idx;'
+            f'DROP INDEX IF EXISTS {graph_name}.treenode_pre_unique_idx;'
         )
 
         self.execute_command(
-            f'DROP INDEX IF EXISTS {graph_name}.treenode_integer_id_idx;'
+            f'DROP INDEX IF EXISTS {graph_name}.treenode_pre_idx;'
         )
         self.execute_command(f"ANALYZE {graph_name}.\"{node_type}\"")
 
     def drop_s_index(self, node_type: str, graph_name: str):
         self.execute_command(
-            f'DROP INDEX IF EXISTS {graph_name}.treenode_string_id_prefix_idx;'
+            f'DROP INDEX IF EXISTS {graph_name}.treenode_dewey_prefix_idx;'
         )
         #self.execute_command(
-        #    f'DROP INDEX IF EXISTS {graph_name}.treenode_string_id_idx;'
+        #    f'DROP INDEX IF EXISTS {graph_name}.treenode_dewey_idx;'
         #)
         self.execute_command(f"ANALYZE {graph_name}.\"{node_type}\"")
 
@@ -260,17 +261,43 @@ USING BTREE (
         self.cursor.execute(command_string)
 
 class KuzuExecutor(Executor):
+    DEPTH_METADATA_FILENAME = "max_depths.json"
+
     def __init__(self, db_base_path: str):
         if kuzu is None:
             raise ImportError("kuzu package is required for KuzuExecutor")
         self.db_base_path = db_base_path
         self.db = None
         self.conn = None
+        self.var_length_max_depth = self._load_var_length_max_depth()
+
+    def _load_var_length_max_depth(self):
+        metadata_path = os.path.join(
+            self.db_base_path, self.DEPTH_METADATA_FILENAME
+        )
+        try:
+            with open(metadata_path, encoding="utf-8") as handle:
+                metadata = json.load(handle)
+            maximum = metadata["global_max_depth"]
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RuntimeError(
+                f"Cannot load Kuzu depth metadata from {metadata_path}; "
+                "reinitialize the Kuzu databases"
+            ) from exc
+        if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 0:
+            raise RuntimeError(
+                f"Invalid global_max_depth in {metadata_path}: {maximum!r}"
+            )
+        # A singleton tree has depth 0, while recursive queries start at length 1.
+        return max(1, maximum)
 
     def set_graph(self, graph_name: str):
         db_path = os.path.join(self.db_base_path, graph_name)
         self.db = kuzu.Database(db_path)
         self.conn = kuzu.Connection(self.db)
+        self.conn.execute(
+            f"CALL var_length_extend_max_depth={self.var_length_max_depth}"
+        )
 
     def execute_query(self, query_string: str):
         executable_query = self._strip_leading_sql_comments(query_string)
@@ -311,7 +338,11 @@ class KuzuExecutor(Executor):
 
         # PROFILE executes the query and returns the plan with timing info
         profile_result = self.conn.execute(f"PROFILE {profile_query}")
-        plan = profile_result.get_as_df().to_string(index=False).strip()
+        plan_parts = []
+        while profile_result.has_next():
+            row = profile_result.get_next()
+            plan_parts.extend(str(value) for value in row if value is not None)
+        plan = "\n".join(plan_parts).strip()
 
         # Execute again for wall-clock timing
         time_elapsed, query_results = self.execute_query(query_string)
@@ -323,15 +354,15 @@ class KuzuExecutor(Executor):
 
     def collect_id(self, annotation: str | int, node_type: str, graph_name: str):
         # In Kuzu the primary key IS the annotation value itself
-        # (string_id for dewey, integer_id for prepost, id for plain)
+        # (dewey for dewey, pre for prepost, id for plain)
         return annotation
 
     def create_ir_index(self, node_type: str, graph_name: str):
-        # integer_id is the primary key in prepost databases, already indexed
+        # pre is the primary key in prepost databases, already indexed
         pass
 
     def create_s_index(self, node_type: str, graph_name: str):
-        # string_id is the primary key in dewey databases, already indexed
+        # dewey is the primary key in dewey databases, already indexed
         pass
 
     def drop_ir_index(self, node_type: str, graph_name: str):
@@ -429,34 +460,34 @@ class Neo4jExecutor(Executor):
         return time_elapsed, plan, est_cost, query_results
 
     def collect_id(self, annotation: str | int, node_type: str, graph_name: str):
-        # Neo4j queries use property values directly (id, string_id, integer_id)
+        # Neo4j queries use property values directly (id, dewey, pre)
         return annotation
 
     def create_ir_index(self, node_type: str, graph_name: str):
         db_name = graph_name.replace("_", ".")
         with self.driver.session(database=db_name) as session:
             session.run(
-                f"CREATE INDEX treenode_integer_id_idx IF NOT EXISTS "
-                f"FOR (n:{node_type}) ON (n.integer_id)"
+                f"CREATE INDEX treenode_pre_idx IF NOT EXISTS "
+                f"FOR (n:{node_type}) ON (n.pre)"
             )
 
     def create_s_index(self, node_type: str, graph_name: str):
         db_name = graph_name.replace("_", ".")
         with self.driver.session(database=db_name) as session:
             session.run(
-                f"CREATE INDEX treenode_string_id_idx IF NOT EXISTS "
-                f"FOR (n:{node_type}) ON (n.string_id)"
+                f"CREATE INDEX treenode_dewey_idx IF NOT EXISTS "
+                f"FOR (n:{node_type}) ON (n.dewey)"
             )
 
     def drop_ir_index(self, node_type: str, graph_name: str):
         db_name = graph_name.replace("_", ".")
         with self.driver.session(database=db_name) as session:
-            session.run("DROP INDEX treenode_integer_id_idx IF EXISTS")
+            session.run("DROP INDEX treenode_pre_idx IF EXISTS")
 
     def drop_s_index(self, node_type: str, graph_name: str):
         db_name = graph_name.replace("_", ".")
         with self.driver.session(database=db_name) as session:
-            session.run("DROP INDEX treenode_string_id_idx IF EXISTS")
+            session.run("DROP INDEX treenode_dewey_idx IF EXISTS")
 
     def execute_command(self, command_string: str):
         """Execute a command. Silently ignores PostgreSQL-specific commands

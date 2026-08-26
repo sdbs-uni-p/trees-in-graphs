@@ -1,8 +1,7 @@
 -- SPDX-License-Identifier: GPL-3.0-only
 
-MATCH (root:$NODE_TYPE {integer_id: $prepostRoot})
-WITH root.upper_bound AS upperBound
+MATCH (root:$NODE_TYPE {pre: $prepostRoot})
 MATCH (n:$NODE_TYPE)
-WHERE n.integer_id > $prepostRoot
-AND n.integer_id <= upperBound
+WHERE n.pre > root.pre
+AND n.pre < root.post
 RETURN n;

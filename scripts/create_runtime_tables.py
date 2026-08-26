@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the four AGE runtime tables requested for the paper evaluation."""
+"""Create runtime tables for AGE, Kuzu, Neo4j, or AGE LDBC results."""
 
 import argparse
 import csv
@@ -340,13 +340,18 @@ def svg_page(title, rows, columns=None, column_widths=None):
     has_lower_bound = any(value.startswith(">") for value in speedup_values)
     has_double_timeout = any(value == "–" for value in speedup_values)
     notes = []
+    is_ldbc = columns[0] == "Query"
     if columns[0] == "Graph":
         notes.extend((
             "Graph: F = forest; NT = normal tree (truebase); DT = deep tree (ultratall); WT = wide tree (ultrawide); number = node count;",
             "SNB/C = Comment, SNB/P = Place, SNB/T = Tagclass (SNB SF1).",
         ))
     notes.extend([
-        "Runtimes: median of five runs." + (' ">6 h" denotes a timeout.' if has_timeout else ""),
+        (
+            "Runtimes: median of five runs, in milliseconds (ms)."
+            if is_ldbc
+            else "Runtimes: median of five runs."
+        ) + (' ">6 h" denotes a timeout.' if has_timeout else ""),
         "Speedup Dewey = Baseline / Dewey; "
         "Speedup Prepost = Baseline / Prepost."
         + (' ">" denotes a lower bound calculated using the 6 h timeout.' if has_lower_bound else "")
@@ -354,6 +359,11 @@ def svg_page(title, rows, columns=None, column_widths=None):
     ])
     if has_lower_bound:
         notes.append("Bold values are derived from a timeout.")
+    if is_ldbc:
+        notes.append(
+            "Speedup colors: red = slowdown; yellow = 1x; green = speedup; "
+            "darker green = larger speedup."
+        )
     note_y = table_bottom + 16
     for line_number, note in enumerate(notes):
         parts.append(f'<text x="{left}" y="{note_y + line_number * 11}" font-size="7.5">{html.escape(note)}</text>')
@@ -439,7 +449,7 @@ def main():
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="age-runtime-tables-") as temp_dir_name:
+    with tempfile.TemporaryDirectory(prefix="runtime-tables-") as temp_dir_name:
         temp_dir = Path(temp_dir_name)
         page_pdfs = []
         with args.input.open(newline="", encoding="utf-8-sig") as handle:

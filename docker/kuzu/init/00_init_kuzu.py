@@ -4,7 +4,8 @@
 """
 Initialize Kuzu databases for the tree benchmark.
 
-Creates one Kuzu database per graph variant (e.g. truebase_10_plain),
+Creates one Kuzu database per AGE-compatible graph variant
+(e.g. artificial_trees_truebase_10_baseline),
 mirroring the Apache AGE setup. Each database contains a node table
 and a relationship table loaded from the same CSV files used by AGE.
 
@@ -14,6 +15,7 @@ a temporary directory before loading.
 """
 
 import csv
+import json
 import os
 import shutil
 import tempfile
@@ -22,6 +24,7 @@ import kuzu
 
 DATA_DIR = "/project/data/prepared"
 KUZU_DIR = "/kuzu_data"
+DEPTH_METADATA_FILE = os.path.join(KUZU_DIR, "max_depths.json")
 
 # Node table schemas per annotation type (column_name, kuzu_type)
 NODE_SCHEMAS = {
@@ -30,14 +33,14 @@ NODE_SCHEMAS = {
     ],
     "dewey": [
         ("id", "INT64"),
-        ("string_id", "STRING"),
+        ("dewey", "STRING"),
         ("height", "INT64"),
         ("depth", "INT64"),
     ],
     "prepost": [
         ("id", "INT64"),
-        ("integer_id", "INT64"),
-        ("upper_bound", "INT64"),
+        ("pre", "INT64"),
+        ("post", "INT64"),
         ("height", "INT64"),
         ("depth", "INT64"),
     ],
@@ -46,21 +49,26 @@ NODE_SCHEMAS = {
 # Primary key column per annotation type
 PRIMARY_KEYS = {
     "plain": "id",
-    "dewey": "string_id",
-    "prepost": "integer_id",
+    "dewey": "dewey",
+    "prepost": "pre",
 }
 
 # CSV columns to extract from AGE node CSVs (skip 'type' and AGE-specific columns)
 NODE_CSV_COLUMNS = {
     "plain": ["id"],
-    "dewey": ["id", "string_id", "height", "depth"],
-    "prepost": ["id", "integer_id", "upper_bound", "height", "depth"],
+    "dewey": ["id", "dewey", "height", "depth"],
+    "prepost": ["id", "pre", "post", "height", "depth"],
 }
 
 # All datasets to load
 ARTIFICIAL_TREE_TYPES = ["truebase", "ultratall", "ultrawide"]
 ARTIFICIAL_TREE_SIZES = [10, 100, 1000, 10000, 100000]
 ANNOTATION_TYPES = ["plain", "dewey", "prepost"]
+
+
+def graph_variant(annotation: str) -> str:
+    """Return the AGE-compatible graph suffix for an annotation source."""
+    return "baseline" if annotation == "plain" else annotation
 
 
 def tree_nodes_filename(annotation: str) -> str:
@@ -70,7 +78,7 @@ def tree_nodes_filename(annotation: str) -> str:
 # â”€â”€â”€ sf1 (full LDBC SNB) constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 # Labels that carry tree-annotation columns (dewey/prepost)
-TREE_ANNOTATED_LABELS = {"Comment", "Place", "Tagclass"}
+TREE_ANNOTATED_LABELS = {"Comment", "Place", "TagClass"}
 
 # Non-tree node types: same schema across all annotation variants
 NON_TREE_NODE_SCHEMAS = {
@@ -105,20 +113,20 @@ S_ALL_TREE_NODE_SCHEMAS = {
                              ("browserUsed","STRING"),("content","STRING"),("length","INT64")],
     ("Comment","dewey"):   [("id","INT64"),("creationDate","STRING"),("locationIP","STRING"),
                              ("browserUsed","STRING"),("content","STRING"),("length","INT64"),
-                             ("height","INT64"),("depth","INT64"),("string_id","STRING")],
+                             ("height","INT64"),("depth","INT64"),("dewey","STRING")],
     ("Comment","prepost"): [("id","INT64"),("creationDate","STRING"),("locationIP","STRING"),
                              ("browserUsed","STRING"),("content","STRING"),("length","INT64"),
-                             ("height","INT64"),("depth","INT64"),("integer_id","INT64"),("upper_bound","INT64")],
+                             ("height","INT64"),("depth","INT64"),("pre","INT64"),("post","INT64")],
     ("Place","plain"):     [("id","INT64"),("name","STRING"),("url","STRING"),("type","STRING")],
     ("Place","dewey"):     [("id","INT64"),("name","STRING"),("url","STRING"),("type","STRING"),
-                             ("height","INT64"),("depth","INT64"),("string_id","STRING")],
+                             ("height","INT64"),("depth","INT64"),("dewey","STRING")],
     ("Place","prepost"):   [("id","INT64"),("name","STRING"),("url","STRING"),("type","STRING"),
-                             ("height","INT64"),("depth","INT64"),("integer_id","INT64"),("upper_bound","INT64")],
-    ("Tagclass","plain"):  [("id","INT64"),("name","STRING"),("url","STRING")],
-    ("Tagclass","dewey"):  [("id","INT64"),("name","STRING"),("url","STRING"),
-                             ("height","INT64"),("depth","INT64"),("string_id","STRING")],
-    ("Tagclass","prepost"):[("id","INT64"),("name","STRING"),("url","STRING"),
-                             ("height","INT64"),("depth","INT64"),("integer_id","INT64"),("upper_bound","INT64")],
+                             ("height","INT64"),("depth","INT64"),("pre","INT64"),("post","INT64")],
+    ("TagClass","plain"):  [("id","INT64"),("name","STRING"),("url","STRING")],
+    ("TagClass","dewey"):  [("id","INT64"),("name","STRING"),("url","STRING"),
+                             ("height","INT64"),("depth","INT64"),("dewey","STRING")],
+    ("TagClass","prepost"):[("id","INT64"),("name","STRING"),("url","STRING"),
+                             ("height","INT64"),("depth","INT64"),("pre","INT64"),("post","INT64")],
 }
 
 # Source CSV filename for each (tree-label, annotation) combination
@@ -129,43 +137,44 @@ S_ALL_TREE_NODE_FILES = {
     ("Place","plain"):     "place_0_0.csv",
     ("Place","dewey"):     "place_0_0_dewey.csv",
     ("Place","prepost"):   "place_0_0_prepost.csv",
-    ("Tagclass","plain"):  "tagclass_0_0.csv",
-    ("Tagclass","dewey"):  "tagclass_0_0_dewey.csv",
-    ("Tagclass","prepost"):"tagclass_0_0_prepost.csv",
+    ("TagClass","plain"):  "tagclass_0_0.csv",
+    ("TagClass","dewey"):  "tagclass_0_0_dewey.csv",
+    ("TagClass","prepost"):"tagclass_0_0_prepost.csv",
 }
 
 # Primary key per annotation type for tree-annotated nodes in sf1
 S_ALL_TREE_PKS = {
     "plain":   "id",
-    "dewey":   "string_id",
-    "prepost": "integer_id",
+    "dewey":   "dewey",
+    "prepost": "pre",
 }
 
-# All 23 edge types: (rel_label, from_label, to_label, csv_filename)
+# All 23 edge sources mapped to the same 15 logical labels used by AGE.
+# Kuzu relationship groups combine sources with different endpoint pairs.
 S_ALL_EDGES = [
-    ("comment_hasCreator_person_0_0",       "Comment",      "Person",       "comment_hasCreator_person_0_0.csv"),
-    ("comment_hasTag_tag_0_0",              "Comment",      "Tag",          "comment_hasTag_tag_0_0.csv"),
-    ("comment_isLocatedIn_place_0_0",       "Comment",      "Place",        "comment_isLocatedIn_place_0_0.csv"),
-    ("comment_replyOf_comment_0_0",         "Comment",      "Comment",      "comment_replyOf_comment_0_0.csv"),
-    ("comment_replyOf_post_0_0",            "Comment",      "Post",         "comment_replyOf_post_0_0.csv"),
-    ("forum_containerOf_post_0_0",          "Forum",        "Post",         "forum_containerOf_post_0_0.csv"),
-    ("forum_hasMember_person_0_0",          "Forum",        "Person",       "forum_hasMember_person_0_0.csv"),
-    ("forum_hasModerator_person_0_0",       "Forum",        "Person",       "forum_hasModerator_person_0_0.csv"),
-    ("forum_hasTag_tag_0_0",                "Forum",        "Tag",          "forum_hasTag_tag_0_0.csv"),
-    ("organisation_isLocatedIn_place_0_0",  "Organisation", "Place",        "organisation_isLocatedIn_place_0_0.csv"),
-    ("person_hasInterest_tag_0_0",          "Person",       "Tag",          "person_hasInterest_tag_0_0.csv"),
-    ("person_isLocatedIn_place_0_0",        "Person",       "Place",        "person_isLocatedIn_place_0_0.csv"),
-    ("person_knows_person_0_0",             "Person",       "Person",       "person_knows_person_0_0.csv"),
-    ("person_likes_comment_0_0",            "Person",       "Comment",      "person_likes_comment_0_0.csv"),
-    ("person_likes_post_0_0",               "Person",       "Post",         "person_likes_post_0_0.csv"),
-    ("person_studyAt_organisation_0_0",     "Person",       "Organisation", "person_studyAt_organisation_0_0.csv"),
-    ("person_workAt_organisation_0_0",      "Person",       "Organisation", "person_workAt_organisation_0_0.csv"),
-    ("place_isPartOf_place_0_0",            "Place",        "Place",        "place_isPartOf_place_0_0.csv"),
-    ("post_hasCreator_person_0_0",          "Post",         "Person",       "post_hasCreator_person_0_0.csv"),
-    ("post_hasTag_tag_0_0",                 "Post",         "Tag",          "post_hasTag_tag_0_0.csv"),
-    ("post_isLocatedIn_place_0_0",          "Post",         "Place",        "post_isLocatedIn_place_0_0.csv"),
-    ("tag_hasType_tagclass_0_0",            "Tag",          "Tagclass",     "tag_hasType_tagclass_0_0.csv"),
-    ("tagclass_isSubclassOf_tagclass_0_0",  "Tagclass",     "Tagclass",     "tagclass_isSubclassOf_tagclass_0_0.csv"),
+    ("HAS_CREATOR",    "Comment",      "Person",       "comment_hasCreator_person_0_0.csv"),
+    ("HAS_TAG",        "Comment",      "Tag",          "comment_hasTag_tag_0_0.csv"),
+    ("IS_LOCATED_IN",  "Comment",      "Place",        "comment_isLocatedIn_place_0_0.csv"),
+    ("REPLY_OF",       "Comment",      "Comment",      "comment_replyOf_comment_0_0.csv"),
+    ("REPLY_OF",       "Comment",      "Post",         "comment_replyOf_post_0_0.csv"),
+    ("CONTAINER_OF",   "Forum",        "Post",         "forum_containerOf_post_0_0.csv"),
+    ("HAS_MEMBER",     "Forum",        "Person",       "forum_hasMember_person_0_0.csv"),
+    ("HAS_MODERATOR",  "Forum",        "Person",       "forum_hasModerator_person_0_0.csv"),
+    ("HAS_TAG",        "Forum",        "Tag",          "forum_hasTag_tag_0_0.csv"),
+    ("IS_LOCATED_IN",  "Organisation", "Place",        "organisation_isLocatedIn_place_0_0.csv"),
+    ("HAS_INTEREST",   "Person",       "Tag",          "person_hasInterest_tag_0_0.csv"),
+    ("IS_LOCATED_IN",  "Person",       "Place",        "person_isLocatedIn_place_0_0.csv"),
+    ("KNOWS",          "Person",       "Person",       "person_knows_person_0_0.csv"),
+    ("LIKES",          "Person",       "Comment",      "person_likes_comment_0_0.csv"),
+    ("LIKES",          "Person",       "Post",         "person_likes_post_0_0.csv"),
+    ("STUDY_AT",       "Person",       "Organisation", "person_studyAt_organisation_0_0.csv"),
+    ("WORK_AT",        "Person",       "Organisation", "person_workAt_organisation_0_0.csv"),
+    ("IS_PART_OF",     "Place",        "Place",        "place_isPartOf_place_0_0.csv"),
+    ("HAS_CREATOR",    "Post",         "Person",       "post_hasCreator_person_0_0.csv"),
+    ("HAS_TAG",        "Post",         "Tag",          "post_hasTag_tag_0_0.csv"),
+    ("IS_LOCATED_IN",  "Post",         "Place",        "post_isLocatedIn_place_0_0.csv"),
+    ("HAS_TYPE",       "Tag",          "TagClass",     "tag_hasType_tagclass_0_0.csv"),
+    ("IS_SUBCLASS_OF", "TagClass",     "TagClass",     "tagclass_isSubclassOf_tagclass_0_0.csv"),
 ]
 
 
@@ -177,7 +186,9 @@ def build_dataset_list():
     for tree_type in ARTIFICIAL_TREE_TYPES:
         for size in ARTIFICIAL_TREE_SIZES:
             for annotation in ANNOTATION_TYPES:
-                graph_name = f"{tree_type}_{size}_{annotation}"
+                graph_name = (
+                    f"artificial_trees_{tree_type}_{size}_{graph_variant(annotation)}"
+                )
                 node_csv = os.path.join(
                     DATA_DIR,
                     "artificial_trees",
@@ -208,7 +219,7 @@ def build_dataset_list():
     # Artificial forest
     for forest_size in [40, 1000]:
         for annotation in ANNOTATION_TYPES:
-            graph_name = f"artificial_forest_{forest_size}_{annotation}"
+            graph_name = f"artificial_forests_{forest_size}_{graph_variant(annotation)}"
             node_csv = os.path.join(
                 DATA_DIR,
                 "artificial_forests",
@@ -234,58 +245,72 @@ def build_dataset_list():
                 }
             )
 
-    # SNB s1
-    for annotation in ANNOTATION_TYPES:
-        graph_name = f"s1_{annotation}"
-        node_file = "comment_0_0.csv" if annotation == "plain" else f"comment_0_0_{annotation}.csv"
-        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", node_file)
-        edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "comment_replyOf_comment_0_0.csv")
-        datasets.append(
-            {
-                "graph_name": graph_name,
-                "node_label": "Comment",
-                "edge_label": "comment_replyOf_comment_0_0",
-                "node_csv": node_csv,
-                "edge_csv": edge_csv,
-                "annotation": annotation,
-            }
-        )
-
-    # SNB s2 â€” Place nodes
-    for annotation in ANNOTATION_TYPES:
-        graph_name = f"s2_{annotation}"
-        node_file = "place_0_0.csv" if annotation == "plain" else f"place_0_0_{annotation}.csv"
-        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", node_file)
-        edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "place_isPartOf_place_0_0.csv")
-        datasets.append(
-            {
-                "graph_name": graph_name,
-                "node_label": "Place",
-                "edge_label": "place_isPartOf_place_0_0",
-                "node_csv": node_csv,
-                "edge_csv": edge_csv,
-                "annotation": annotation,
-            }
-        )
-
-    # SNB s3 â€” Tagclass nodes
-    for annotation in ANNOTATION_TYPES:
-        graph_name = f"s3_{annotation}"
-        node_file = "tagclass_0_0.csv" if annotation == "plain" else f"tagclass_0_0_{annotation}.csv"
-        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", node_file)
-        edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "tagclass_isSubclassOf_tagclass_0_0.csv")
-        datasets.append(
-            {
-                "graph_name": graph_name,
-                "node_label": "Tagclass",
-                "edge_label": "tagclass_isSubclassOf_tagclass_0_0",
-                "node_csv": node_csv,
-                "edge_csv": edge_csv,
-                "annotation": annotation,
-            }
-        )
-
     return datasets
+
+
+def read_max_depth(node_csv):
+    """Return the maximum non-negative depth in an annotated node CSV."""
+    maximum = None
+    with open(node_csv, "r", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames or "depth" not in reader.fieldnames:
+            raise ValueError(f"Missing depth column in {node_csv}")
+        for line_number, row in enumerate(reader, start=2):
+            try:
+                depth = int(row["depth"])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Invalid depth in {node_csv}:{line_number}: {row['depth']!r}"
+                ) from exc
+            if depth < 0:
+                raise ValueError(
+                    f"Negative depth in {node_csv}:{line_number}: {depth}"
+                )
+            maximum = depth if maximum is None else max(maximum, depth)
+    if maximum is None:
+        raise ValueError(f"Annotated node CSV is empty: {node_csv}")
+    return maximum
+
+
+def determine_depth_metadata(datasets):
+    """Determine per-graph and global depths from configured Dewey CSVs."""
+    sources = {}
+    for dataset in datasets:
+        if dataset["annotation"] != "dewey":
+            continue
+        graph_name = dataset["graph_name"].removesuffix("_dewey")
+        sources[graph_name] = dataset["node_csv"]
+
+    snb_nodes_dir = os.path.join(DATA_DIR, "snb", "sf1", "nodes")
+    for tree_label in sorted(TREE_ANNOTATED_LABELS):
+        graph_name = f"snb_sf1_{tree_label.lower()}"
+        sources[graph_name] = os.path.join(
+            snb_nodes_dir, S_ALL_TREE_NODE_FILES[(tree_label, "dewey")]
+        )
+
+    graph_depths = {}
+    for graph_name, node_csv in sorted(sources.items()):
+        if not os.path.isfile(node_csv):
+            raise FileNotFoundError(
+                f"Configured Dewey CSV not found for {graph_name}: {node_csv}"
+            )
+        graph_depths[graph_name] = read_max_depth(node_csv)
+
+    if not graph_depths:
+        raise ValueError("No configured Dewey datasets found")
+    return {
+        "global_max_depth": max(graph_depths.values()),
+        "graphs": graph_depths,
+    }
+
+
+def write_depth_metadata(metadata):
+    """Atomically publish generated depth metadata for experiment connections."""
+    temporary_path = DEPTH_METADATA_FILE + ".tmp"
+    with open(temporary_path, "w", encoding="utf-8") as handle:
+        json.dump(metadata, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary_path, DEPTH_METADATA_FILE)
 
 
 def preprocess_node_csv(src_path, dst_path, annotation):
@@ -347,8 +372,10 @@ def preprocess_edge_csv_multi(src_path, dst_path, id_mappings):
         for row in reader:
             start = row["start_id"]
             end = row["end_id"]
-            s_type = row["start_vertex_type"]
-            e_type = row["end_vertex_type"]
+            # Prepared SNB CSVs still spell this source type "Tagclass";
+            # normalize it to the AGE-compatible node label used in Kuzu.
+            s_type = row["start_vertex_type"].replace("Tagclass", "TagClass")
+            e_type = row["end_vertex_type"].replace("Tagclass", "TagClass")
             if s_type in id_mappings:
                 start = id_mappings[s_type].get(start, start)
             if e_type in id_mappings:
@@ -439,9 +466,9 @@ def create_kuzu_database(dataset, tmp_dir):
     return True
 
 
-def create_s_all_kuzu_database(annotation, tmp_dir):
-    """Create and populate the s_all_{annotation} Kuzu database."""
-    graph_name = f"s_all_{annotation}"
+def create_snb_kuzu_database(tree_label, annotation, tmp_dir):
+    """Create a full SNB graph with one AGE-compatible annotated tree."""
+    graph_name = f"snb_sf1_{tree_label.lower()}_{graph_variant(annotation)}"
     db_path = os.path.join(KUZU_DIR, graph_name)
     nodes_dir = os.path.join(DATA_DIR, "snb", "sf1", "nodes")
     edges_dir = os.path.join(DATA_DIR, "snb", "sf1", "edges")
@@ -455,21 +482,19 @@ def create_s_all_kuzu_database(annotation, tmp_dir):
         else:
             shutil.rmtree(db_path)
 
-    # Build id_mappings for tree-annotated labels (dewey/prepost only)
+    # Only the selected tree uses its structural key; all other labels use id.
     id_mappings = {}
     pk_col = S_ALL_TREE_PKS[annotation]
     if pk_col != "id":
-        for label in TREE_ANNOTATED_LABELS:
-            node_file = S_ALL_TREE_NODE_FILES[(label, annotation)]
-            node_csv_path = os.path.join(nodes_dir, node_file)
-            if not os.path.isfile(node_csv_path):
-                continue
+        node_file = S_ALL_TREE_NODE_FILES[(tree_label, annotation)]
+        node_csv_path = os.path.join(nodes_dir, node_file)
+        if os.path.isfile(node_csv_path):
             mapping = {}
             with open(node_csv_path, "r", newline="") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     mapping[row["id"]] = row[pk_col]
-            id_mappings[label] = mapping
+            id_mappings[tree_label] = mapping
 
     db = kuzu.Database(db_path)
     conn = kuzu.Connection(db)
@@ -503,14 +528,15 @@ def create_s_all_kuzu_database(annotation, tmp_dir):
         print(f"    Loaded {label}")
 
     # Load tree-annotated node types
-    for label in ["Comment", "Place", "Tagclass"]:
-        node_file = S_ALL_TREE_NODE_FILES[(label, annotation)]
+    for label in ["Comment", "Place", "TagClass"]:
+        label_annotation = annotation if label == tree_label else "plain"
+        node_file = S_ALL_TREE_NODE_FILES[(label, label_annotation)]
         node_csv_path = os.path.join(nodes_dir, node_file)
         if not os.path.isfile(node_csv_path):
             print(f"  SKIP {label}: node CSV not found ({node_csv_path})")
             continue
 
-        schema = S_ALL_TREE_NODE_SCHEMAS[(label, annotation)]
+        schema = S_ALL_TREE_NODE_SCHEMAS[(label, label_annotation)]
         columns_to_extract = [col for col, _ in schema]
         tmp_node_csv = os.path.join(tmp_dir, f"{graph_name}_{label}_nodes.csv")
         with open(node_csv_path, "r", newline="") as fin, open(
@@ -523,15 +549,17 @@ def create_s_all_kuzu_database(annotation, tmp_dir):
                 writer.writerow({col: row[col].replace("|", "") for col in columns_to_extract})
 
         columns_sql = ", ".join(f"{col} {dtype}" for col, dtype in schema)
+        label_pk = S_ALL_TREE_PKS[label_annotation]
         conn.execute(
-            f"CREATE NODE TABLE {label}({columns_sql}, PRIMARY KEY({pk_col}))"
+            f"CREATE NODE TABLE {label}({columns_sql}, PRIMARY KEY({label_pk}))"
         )
         conn.execute(f"COPY {label} FROM '{tmp_node_csv}' (HEADER=true, DELIM='|')")
         os.remove(tmp_node_csv)
         loaded_labels.add(label)
         print(f"    Loaded {label}")
 
-    # Load all 23 edge types
+    # Collect available edge sources by their AGE-compatible logical label.
+    edge_groups = {}
     for edge_label, from_label, to_label, edge_file in S_ALL_EDGES:
         if from_label not in loaded_labels or to_label not in loaded_labels:
             print(f"  SKIP edge {edge_label}: {from_label} or {to_label} not loaded")
@@ -542,15 +570,38 @@ def create_s_all_kuzu_database(annotation, tmp_dir):
             print(f"  SKIP edge {edge_label}: CSV not found ({edge_csv_path})")
             continue
 
-        tmp_edge_csv = os.path.join(tmp_dir, f"{graph_name}_{edge_label}.csv")
-        preprocess_edge_csv_multi(edge_csv_path, tmp_edge_csv, id_mappings)
-
-        conn.execute(
-            f"CREATE REL TABLE {edge_label}(FROM {from_label} TO {to_label})"
+        edge_groups.setdefault(edge_label, []).append(
+            (from_label, to_label, edge_file, edge_csv_path)
         )
-        conn.execute(f"COPY {edge_label} FROM '{tmp_edge_csv}' (HEADER=true, DELIM='|')")
-        os.remove(tmp_edge_csv)
-        print(f"    Loaded edge {edge_label}")
+
+    # A Kuzu relationship group represents one logical AGE edge label across
+    # all of its valid source/target node-table combinations.
+    for edge_label, sources in edge_groups.items():
+        endpoint_pairs = [(source[0], source[1]) for source in sources]
+        endpoints_sql = ", ".join(
+            f"FROM {from_label} TO {to_label}"
+            for from_label, to_label in endpoint_pairs
+        )
+        conn.execute(f"CREATE REL TABLE {edge_label}({endpoints_sql})")
+
+        for from_label, to_label, edge_file, edge_csv_path in sources:
+            source_name = os.path.splitext(edge_file)[0]
+            tmp_edge_csv = os.path.join(
+                tmp_dir, f"{graph_name}_{source_name}.csv"
+            )
+            preprocess_edge_csv_multi(edge_csv_path, tmp_edge_csv, id_mappings)
+
+            copy_options = ["HEADER=true", "DELIM='|'"]
+            if len(endpoint_pairs) > 1:
+                copy_options.extend(
+                    [f"FROM='{from_label}'", f"TO='{to_label}'"]
+                )
+            conn.execute(
+                f"COPY {edge_label} FROM '{tmp_edge_csv}' "
+                f"({', '.join(copy_options)})"
+            )
+            os.remove(tmp_edge_csv)
+            print(f"    Loaded {edge_file} into {edge_label}")
 
     print(f"  OK: {graph_name}")
     return True
@@ -561,6 +612,9 @@ def main():
     print(f"Found {len(datasets)} graph variants to create.\n")
 
     os.makedirs(KUZU_DIR, exist_ok=True)
+    print("Determining maximum tree depths...")
+    depth_metadata = determine_depth_metadata(datasets)
+    print(f"Global maximum tree depth: {depth_metadata['global_max_depth']}\n")
 
     tmp_dir = tempfile.mkdtemp(prefix="kuzu_init_")
     try:
@@ -573,14 +627,20 @@ def main():
             else:
                 skipped += 1
             print()
-        # sf1 multi-type graphs
-        for annotation in ANNOTATION_TYPES:
-            print(f"[s_all_{annotation}]")
-            create_s_all_kuzu_database(annotation, tmp_dir)
-            print()
+        # Full SNB graphs, matching AGE's tree-specific graph names.
+        for tree_label in sorted(TREE_ANNOTATED_LABELS):
+            for annotation in ANNOTATION_TYPES:
+                graph_name = (
+                    f"snb_sf1_{tree_label.lower()}_{graph_variant(annotation)}"
+                )
+                print(f"[{graph_name}]")
+                create_snb_kuzu_database(tree_label, annotation, tmp_dir)
+                print()
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
+    write_depth_metadata(depth_metadata)
+    print(f"Depth metadata: {DEPTH_METADATA_FILE}")
     print(f"Done. Created: {created}, Skipped: {skipped}")
 
 

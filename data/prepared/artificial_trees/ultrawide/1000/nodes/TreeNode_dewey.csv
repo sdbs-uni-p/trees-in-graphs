@@ -1,4 +1,4 @@
-id,type,string_id,height,depth
+id,type,dewey,height,depth
 1,TreeNode,1,8,0
 2,TreeNode,1.1,1,1
 311,TreeNode,1.1.1,0,2

@@ -1,4 +1,4 @@
-id,type,integer_id,upper_bound,height,depth
+id,type,pre,post,height,depth
 1,TreeNode,1,20000,21,0
 2,TreeNode,2,9747,17,1
 28,TreeNode,3,768,10,2

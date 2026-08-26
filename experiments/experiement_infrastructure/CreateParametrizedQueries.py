@@ -52,13 +52,13 @@ class Parametrizer:
         self.graph_name = metadata_name
         if "s1" in self.graph_name:
             self.node_name = "Comment"
-            self.relation_name = "comment_replyOf_comment_0_0"
+            self.relation_name = "REPLY_OF"
         elif "s2" in self.graph_name:
             self.node_name = "Place"
-            self.relation_name = "place_isPartOf_place_0_0"
+            self.relation_name = "IS_PART_OF"
         elif "s3" in self.graph_name:
-            self.node_name = "Tagclass"
-            self.relation_name = "tagclass_isSubclassOf_tagclass_0_0"
+            self.node_name = "TagClass"
+            self.relation_name = "IS_SUBCLASS_OF"
         else:
             self.node_name = "TreeNode"
             self.relation_name = "HAS_CHILD"
@@ -108,21 +108,21 @@ class KuzuParametrizer(Parametrizer):
     """
     Parametrizer for Kuzu that provides plain, dewey, and prepost node
     identifiers, since each Kuzu graph variant uses a different primary key
-    (id for plain, string_id for dewey, integer_id for prepost).
+    (id for plain, dewey for dewey, pre for prepost).
 
     Loads both dewey and prepost metadata and uses index-based correspondence
     to ensure all three variants query the same node. On first use for each
-    graph, builds a string_idâ†’id mapping by querying the dewey Kuzu database
+    graph, builds a deweyâ†’id mapping by querying the dewey Kuzu database
     so that plain id values can be resolved.
 
     Returns parameters:
       $rootID, $id1, $id2, $nodeID                       â€” plain id values
-      $deweyRoot, $deweyId1, $deweyId2, $deweyNodeID     â€” string_id values
-      $prepostRoot, $prepostId1, $prepostId2, $prepostNodeID â€” integer_id values
+      $deweyRoot, $deweyId1, $deweyId2, $deweyNodeID     â€” dewey values
+      $prepostRoot, $prepostId1, $prepostId2, $prepostNodeID â€” pre values
       $REL_TYPE, $NODE_TYPE
 
     Dewey query templates should quote the dewey parameters, e.g.:
-      MATCH (root:$NODE_TYPE {string_id: "$deweyRoot"})
+      MATCH (root:$NODE_TYPE {dewey: "$deweyRoot"})
     """
 
     def __init__(self, base_meta_path: Path, ex: Executor, db_name: str = None):
@@ -143,23 +143,23 @@ class KuzuParametrizer(Parametrizer):
             print(f"Warning: Prepost metadata not found: {prepost_path}")
             self.prepost_meta = None
 
-        # Build string_id â†’ plain id mapping by querying the dewey database
-        # (which now includes the id column alongside string_id).
+        # Build dewey â†’ plain id mapping by querying the dewey database
+        # (which now includes the id column alongside dewey).
         self._dewey_to_id = {}
         if self.current_meta is not None:
             try:
                 _, rows = self.ex.execute_query(
-                    f"MATCH (n:{self.node_name}) RETURN n.string_id, n.id"
+                    f"MATCH (n:{self.node_name}) RETURN n.dewey, n.id"
                 )
                 for row in rows:
-                    string_id = row[0]
+                    dewey = row[0]
                     plain_id = row[1]
-                    self._dewey_to_id[string_id] = plain_id
+                    self._dewey_to_id[dewey] = plain_id
             except Exception as e:
                 print(f"Warning: could not build deweyâ†’id mapping: {e}")
 
     def _resolve_id(self, dewey_value):
-        """Resolve a dewey string_id to its plain id."""
+        """Resolve a Dewey value to its plain id."""
         if self._dewey_to_id and dewey_value in self._dewey_to_id:
             return self._dewey_to_id[dewey_value]
         return dewey_value
@@ -251,15 +251,15 @@ class ReducedKuzuParametrizer(KuzuParametrizer):
                 self._params = json.load(f)
 
     def _plain_to_dewey(self, plain_id: int) -> str | None:
-        """Reverse-lookup: plain id â†’ dewey string_id."""
+        """Reverse-lookup: plain id â†’ Dewey value."""
         if self._dewey_to_id:
-            for string_id, pid in self._dewey_to_id.items():
+            for dewey, pid in self._dewey_to_id.items():
                 if pid == plain_id:
-                    return string_id
+                    return dewey
         return None
 
     def _plain_to_prepost(self, plain_id: int):
-        """Resolve plain id â†’ prepost integer_id via index correspondence."""
+        """Resolve plain id â†’ PrePost pre value via index correspondence."""
         dewey_val = self._plain_to_dewey(plain_id)
         if dewey_val and self.current_meta and self.prepost_meta:
             dewey_ids = self.current_meta["id_list"]
@@ -286,19 +286,19 @@ class ReducedKuzuParametrizer(KuzuParametrizer):
         else:
             self._fixed_rootID = self._FIXED_ROOTS["_default"]
 
-        # Resolve dewey string_id via the _dewey_to_id mapping
+        # Resolve the Dewey value via the _dewey_to_id mapping
         # (built by super().set_metadata from the dewey database)
         if self._dewey_to_id:
-            for string_id, plain_id in self._dewey_to_id.items():
+            for dewey, plain_id in self._dewey_to_id.items():
                 if plain_id == self._fixed_rootID:
-                    self._fixed_deweyRoot = string_id
+                    self._fixed_deweyRoot = dewey
                     break
 
         if self._fixed_deweyRoot is None:
-            print(f"Warning: could not find dewey string_id for id={self._fixed_rootID} "
+            print(f"Warning: could not find Dewey value for id={self._fixed_rootID} "
                   f"in {self.graph_name}")
 
-        # Resolve prepost integer_id via index correspondence in metadata
+        # Resolve the PrePost pre value via index correspondence in metadata
         if self._fixed_deweyRoot and self.current_meta and self.prepost_meta:
             dewey_ids = self.current_meta["id_list"]
             prepost_ids = self.prepost_meta["id_list"]
@@ -308,10 +308,10 @@ class ReducedKuzuParametrizer(KuzuParametrizer):
                     self._fixed_prepostRoot = prepost_ids[idx]
 
         if self._fixed_prepostRoot is None:
-            print(f"Warning: could not find prepost integer_id for dewey={self._fixed_deweyRoot} "
+            print(f"Warning: could not find PrePost pre for dewey={self._fixed_deweyRoot} "
                   f"in {self.graph_name}")
 
-        # Resolve TRUE pair id2: deepest leaf in tree 1 (longest dewey string_id in id_list
+        # Resolve TRUE pair id2: deepest leaf in tree 1 (longest Dewey value in id_list
         # that belongs to the same tree as the fixed root, i.e. starts with root + '.' or == root)
         if self.current_meta and self.prepost_meta and self._fixed_deweyRoot:
             dewey_ids = self.current_meta["id_list"]
@@ -418,27 +418,27 @@ class ReducedParametrizer(Parametrizer):
         self._fixed_id2_t = None
         self._fixed_id2_f = None
 
-    def _dewey_to_plain_id(self, dewey_string_id: str) -> int | None:
-        """Query AGE to get the __id__ property of the node with the given string_id."""
+    def _dewey_to_plain_id(self, dewey_value: str) -> int | None:
+        """Query AGE to get the __id__ property of the node with the given dewey."""
         graph = self.db_name or self.graph_name
         query = f"""SELECT __id__::bigint
 FROM cypher('{graph}', $$
     MATCH (n:{self.node_name})
-    WHERE n.string_id = '{dewey_string_id}'
+    WHERE n.dewey = '{dewey_value}'
     RETURN n.__id__
 $$) AS (__id__ agtype);"""
         _, result = self.ex.execute_query(query)
         return result[0][0] if result else None
 
     def _plain_id_to_dewey(self, target_id: int) -> str | None:
-        """Query AGE to get the string_id property of the node with the given __id__."""
+        """Query AGE to get the dewey property of the node with the given __id__."""
         graph = self.db_name or self.graph_name
-        query = f"""SELECT TRIM('"' FROM string_id::text)
+        query = f"""SELECT TRIM('"' FROM dewey::text)
 FROM cypher('{graph}', $$
     MATCH (n:{self.node_name})
     WHERE n.__id__ = {target_id}
-    RETURN n.string_id
-$$) AS (string_id agtype);"""
+    RETURN n.dewey
+$$) AS (dewey agtype);"""
         _, result = self.ex.execute_query(query)
         return result[0][0] if result else None
 
@@ -462,7 +462,7 @@ $$) AS (string_id agtype);"""
         dewey_roots = self.current_meta["roots"]
         dewey_ids = self.current_meta["id_list"]
 
-        # Find the dewey string_id of the fixed root by querying __id__ property
+        # Find the Dewey value of the fixed root by querying __id__ property
         fixed_dewey_root = self._plain_id_to_dewey(self._fixed_rootID)
 
         if fixed_dewey_root is None:

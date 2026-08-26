@@ -2,7 +2,7 @@
 
 FROM python:3.11-slim
 
-RUN pip install --no-cache-dir kuzu pandas tqdm polars pyarrow
+RUN pip install --no-cache-dir kuzu==0.11.3 pandas tqdm polars pyarrow
 
 RUN mkdir -p /kuzu_data /app/init
 

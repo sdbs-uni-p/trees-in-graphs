@@ -35,14 +35,14 @@ NODE_PROPS = {
     ],
     "dewey": [
         ("id", "toInteger"),
-        ("string_id", None),  # already a string, no cast needed
+        ("dewey", None),  # already a string, no cast needed
         ("height", "toInteger"),
         ("depth", "toInteger"),
     ],
     "prepost": [
         ("id", "toInteger"),
-        ("integer_id", "toInteger"),
-        ("upper_bound", "toInteger"),
+        ("pre", "toInteger"),
+        ("post", "toInteger"),
         ("height", "toInteger"),
         ("depth", "toInteger"),
     ],
@@ -51,14 +51,19 @@ NODE_PROPS = {
 # CSV columns to extract from the prepared node CSVs (skip 'type')
 NODE_CSV_COLUMNS = {
     "plain": ["id"],
-    "dewey": ["id", "string_id", "height", "depth"],
-    "prepost": ["id", "integer_id", "upper_bound", "height", "depth"],
+    "dewey": ["id", "dewey", "height", "depth"],
+    "prepost": ["id", "pre", "post", "height", "depth"],
 }
 
 # All datasets to load
 ARTIFICIAL_TREE_TYPES = ["truebase", "ultratall", "ultrawide"]
 ARTIFICIAL_TREE_SIZES = [10, 100, 1000, 10000, 100000]
 ANNOTATION_TYPES = ["plain", "dewey", "prepost"]
+
+
+def graph_variant(annotation: str) -> str:
+    """Return the AGE-compatible logical graph suffix."""
+    return "baseline" if annotation == "plain" else annotation
 
 
 def tree_nodes_filename(annotation: str) -> str:
@@ -68,7 +73,7 @@ def tree_nodes_filename(annotation: str) -> str:
 # â”€â”€â”€ sf1 (full LDBC SNB) constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 # Labels that carry tree-annotation columns (dewey/prepost)
-TREE_ANNOTATED_LABELS = {"Comment", "Place", "Tagclass"}
+TREE_ANNOTATED_LABELS = {"Comment", "Place", "TagClass"}
 
 # Non-tree node types: (column_name, cast_fn) â€” same across all annotation variants
 NON_TREE_NODE_PROPS = {
@@ -103,37 +108,37 @@ S_ALL_TREE_NODE_PROPS = {
                              ("browserUsed",None),("content",None),("length","toInteger")],
     ("Comment","dewey"):   [("id","toInteger"),("creationDate",None),("locationIP",None),
                              ("browserUsed",None),("content",None),("length","toInteger"),
-                             ("height","toInteger"),("depth","toInteger"),("string_id",None)],
+                             ("height","toInteger"),("depth","toInteger"),("dewey",None)],
     ("Comment","prepost"): [("id","toInteger"),("creationDate",None),("locationIP",None),
                              ("browserUsed",None),("content",None),("length","toInteger"),
                              ("height","toInteger"),("depth","toInteger"),
-                             ("integer_id","toInteger"),("upper_bound","toInteger")],
+                             ("pre","toInteger"),("post","toInteger")],
     ("Place","plain"):     [("id","toInteger"),("name",None),("url",None),("type",None)],
     ("Place","dewey"):     [("id","toInteger"),("name",None),("url",None),("type",None),
-                             ("height","toInteger"),("depth","toInteger"),("string_id",None)],
+                             ("height","toInteger"),("depth","toInteger"),("dewey",None)],
     ("Place","prepost"):   [("id","toInteger"),("name",None),("url",None),("type",None),
                              ("height","toInteger"),("depth","toInteger"),
-                             ("integer_id","toInteger"),("upper_bound","toInteger")],
-    ("Tagclass","plain"):  [("id","toInteger"),("name",None),("url",None)],
-    ("Tagclass","dewey"):  [("id","toInteger"),("name",None),("url",None),
-                             ("height","toInteger"),("depth","toInteger"),("string_id",None)],
-    ("Tagclass","prepost"):[("id","toInteger"),("name",None),("url",None),
+                             ("pre","toInteger"),("post","toInteger")],
+    ("TagClass","plain"):  [("id","toInteger"),("name",None),("url",None)],
+    ("TagClass","dewey"):  [("id","toInteger"),("name",None),("url",None),
+                             ("height","toInteger"),("depth","toInteger"),("dewey",None)],
+    ("TagClass","prepost"):[("id","toInteger"),("name",None),("url",None),
                              ("height","toInteger"),("depth","toInteger"),
-                             ("integer_id","toInteger"),("upper_bound","toInteger")],
+                             ("pre","toInteger"),("post","toInteger")],
 }
 
 S_ALL_TREE_NODE_CSV_COLUMNS = {
     ("Comment","plain"):   ["id","creationDate","locationIP","browserUsed","content","length"],
     ("Comment","dewey"):   ["id","creationDate","locationIP","browserUsed","content","length",
-                            "height","depth","string_id"],
+                            "height","depth","dewey"],
     ("Comment","prepost"): ["id","creationDate","locationIP","browserUsed","content","length",
-                            "height","depth","integer_id","upper_bound"],
+                            "height","depth","pre","post"],
     ("Place","plain"):     ["id","name","url","type"],
-    ("Place","dewey"):     ["id","name","url","type","height","depth","string_id"],
-    ("Place","prepost"):   ["id","name","url","type","height","depth","integer_id","upper_bound"],
-    ("Tagclass","plain"):  ["id","name","url"],
-    ("Tagclass","dewey"):  ["id","name","url","height","depth","string_id"],
-    ("Tagclass","prepost"):["id","name","url","height","depth","integer_id","upper_bound"],
+    ("Place","dewey"):     ["id","name","url","type","height","depth","dewey"],
+    ("Place","prepost"):   ["id","name","url","type","height","depth","pre","post"],
+    ("TagClass","plain"):  ["id","name","url"],
+    ("TagClass","dewey"):  ["id","name","url","height","depth","dewey"],
+    ("TagClass","prepost"):["id","name","url","height","depth","pre","post"],
 }
 
 S_ALL_TREE_NODE_FILES = {
@@ -143,36 +148,36 @@ S_ALL_TREE_NODE_FILES = {
     ("Place","plain"):     "place_0_0.csv",
     ("Place","dewey"):     "place_0_0_dewey.csv",
     ("Place","prepost"):   "place_0_0_prepost.csv",
-    ("Tagclass","plain"):  "tagclass_0_0.csv",
-    ("Tagclass","dewey"):  "tagclass_0_0_dewey.csv",
-    ("Tagclass","prepost"):"tagclass_0_0_prepost.csv",
+    ("TagClass","plain"):  "tagclass_0_0.csv",
+    ("TagClass","dewey"):  "tagclass_0_0_dewey.csv",
+    ("TagClass","prepost"):"tagclass_0_0_prepost.csv",
 }
 
-# All 23 edge types: (rel_label, from_label, to_label, csv_filename)
+# All 23 edge sources mapped to the same 15 logical labels used by AGE/Kuzu.
 S_ALL_EDGES = [
-    ("comment_hasCreator_person_0_0",       "Comment",      "Person",       "comment_hasCreator_person_0_0.csv"),
-    ("comment_hasTag_tag_0_0",              "Comment",      "Tag",          "comment_hasTag_tag_0_0.csv"),
-    ("comment_isLocatedIn_place_0_0",       "Comment",      "Place",        "comment_isLocatedIn_place_0_0.csv"),
-    ("comment_replyOf_comment_0_0",         "Comment",      "Comment",      "comment_replyOf_comment_0_0.csv"),
-    ("comment_replyOf_post_0_0",            "Comment",      "Post",         "comment_replyOf_post_0_0.csv"),
-    ("forum_containerOf_post_0_0",          "Forum",        "Post",         "forum_containerOf_post_0_0.csv"),
-    ("forum_hasMember_person_0_0",          "Forum",        "Person",       "forum_hasMember_person_0_0.csv"),
-    ("forum_hasModerator_person_0_0",       "Forum",        "Person",       "forum_hasModerator_person_0_0.csv"),
-    ("forum_hasTag_tag_0_0",                "Forum",        "Tag",          "forum_hasTag_tag_0_0.csv"),
-    ("organisation_isLocatedIn_place_0_0",  "Organisation", "Place",        "organisation_isLocatedIn_place_0_0.csv"),
-    ("person_hasInterest_tag_0_0",          "Person",       "Tag",          "person_hasInterest_tag_0_0.csv"),
-    ("person_isLocatedIn_place_0_0",        "Person",       "Place",        "person_isLocatedIn_place_0_0.csv"),
-    ("person_knows_person_0_0",             "Person",       "Person",       "person_knows_person_0_0.csv"),
-    ("person_likes_comment_0_0",            "Person",       "Comment",      "person_likes_comment_0_0.csv"),
-    ("person_likes_post_0_0",               "Person",       "Post",         "person_likes_post_0_0.csv"),
-    ("person_studyAt_organisation_0_0",     "Person",       "Organisation", "person_studyAt_organisation_0_0.csv"),
-    ("person_workAt_organisation_0_0",      "Person",       "Organisation", "person_workAt_organisation_0_0.csv"),
-    ("place_isPartOf_place_0_0",            "Place",        "Place",        "place_isPartOf_place_0_0.csv"),
-    ("post_hasCreator_person_0_0",          "Post",         "Person",       "post_hasCreator_person_0_0.csv"),
-    ("post_hasTag_tag_0_0",                 "Post",         "Tag",          "post_hasTag_tag_0_0.csv"),
-    ("post_isLocatedIn_place_0_0",          "Post",         "Place",        "post_isLocatedIn_place_0_0.csv"),
-    ("tag_hasType_tagclass_0_0",            "Tag",          "Tagclass",     "tag_hasType_tagclass_0_0.csv"),
-    ("tagclass_isSubclassOf_tagclass_0_0",  "Tagclass",     "Tagclass",     "tagclass_isSubclassOf_tagclass_0_0.csv"),
+    ("HAS_CREATOR",    "Comment",      "Person",       "comment_hasCreator_person_0_0.csv"),
+    ("HAS_TAG",        "Comment",      "Tag",          "comment_hasTag_tag_0_0.csv"),
+    ("IS_LOCATED_IN",  "Comment",      "Place",        "comment_isLocatedIn_place_0_0.csv"),
+    ("REPLY_OF",       "Comment",      "Comment",      "comment_replyOf_comment_0_0.csv"),
+    ("REPLY_OF",       "Comment",      "Post",         "comment_replyOf_post_0_0.csv"),
+    ("CONTAINER_OF",   "Forum",        "Post",         "forum_containerOf_post_0_0.csv"),
+    ("HAS_MEMBER",     "Forum",        "Person",       "forum_hasMember_person_0_0.csv"),
+    ("HAS_MODERATOR",  "Forum",        "Person",       "forum_hasModerator_person_0_0.csv"),
+    ("HAS_TAG",        "Forum",        "Tag",          "forum_hasTag_tag_0_0.csv"),
+    ("IS_LOCATED_IN",  "Organisation", "Place",        "organisation_isLocatedIn_place_0_0.csv"),
+    ("HAS_INTEREST",   "Person",       "Tag",          "person_hasInterest_tag_0_0.csv"),
+    ("IS_LOCATED_IN",  "Person",       "Place",        "person_isLocatedIn_place_0_0.csv"),
+    ("KNOWS",          "Person",       "Person",       "person_knows_person_0_0.csv"),
+    ("LIKES",          "Person",       "Comment",      "person_likes_comment_0_0.csv"),
+    ("LIKES",          "Person",       "Post",         "person_likes_post_0_0.csv"),
+    ("STUDY_AT",       "Person",       "Organisation", "person_studyAt_organisation_0_0.csv"),
+    ("WORK_AT",        "Person",       "Organisation", "person_workAt_organisation_0_0.csv"),
+    ("IS_PART_OF",     "Place",        "Place",        "place_isPartOf_place_0_0.csv"),
+    ("HAS_CREATOR",    "Post",         "Person",       "post_hasCreator_person_0_0.csv"),
+    ("HAS_TAG",        "Post",         "Tag",          "post_hasTag_tag_0_0.csv"),
+    ("IS_LOCATED_IN",  "Post",         "Place",        "post_isLocatedIn_place_0_0.csv"),
+    ("HAS_TYPE",       "Tag",          "TagClass",     "tag_hasType_tagclass_0_0.csv"),
+    ("IS_SUBCLASS_OF", "TagClass",     "TagClass",     "tagclass_isSubclassOf_tagclass_0_0.csv"),
 ]
 
 
@@ -189,7 +194,9 @@ def build_dataset_list():
     for tree_type in ARTIFICIAL_TREE_TYPES:
         for size in ARTIFICIAL_TREE_SIZES:
             for annotation in ANNOTATION_TYPES:
-                graph_name = f"{tree_type}_{size}_{annotation}"
+                graph_name = (
+                    f"artificial_trees_{tree_type}_{size}_{graph_variant(annotation)}"
+                )
                 node_csv = os.path.join(
                     DATA_DIR,
                     "artificial_trees",
@@ -218,7 +225,7 @@ def build_dataset_list():
     # Artificial forest
     for forest_size in [40, 1000]:
         for annotation in ANNOTATION_TYPES:
-            graph_name = f"artificial_forest_{forest_size}_{annotation}"
+            graph_name = f"artificial_forests_{forest_size}_{graph_variant(annotation)}"
             node_csv = os.path.join(
                 DATA_DIR,
                 "artificial_forests",
@@ -241,51 +248,6 @@ def build_dataset_list():
                 "edge_csv": edge_csv,
                 "annotation": annotation,
             })
-
-    # SNB s1
-    for annotation in ANNOTATION_TYPES:
-        graph_name = f"s1_{annotation}"
-        node_file = "comment_0_0.csv" if annotation == "plain" else f"comment_0_0_{annotation}.csv"
-        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", node_file)
-        edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "comment_replyOf_comment_0_0.csv")
-        datasets.append({
-            "graph_name": graph_name,
-            "node_label": "Comment",
-            "edge_label": "comment_replyOf_comment_0_0",
-            "node_csv": node_csv,
-            "edge_csv": edge_csv,
-            "annotation": annotation,
-        })
-
-    # SNB s2 â€” Place nodes
-    for annotation in ANNOTATION_TYPES:
-        graph_name = f"s2_{annotation}"
-        node_file = "place_0_0.csv" if annotation == "plain" else f"place_0_0_{annotation}.csv"
-        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", node_file)
-        edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "place_isPartOf_place_0_0.csv")
-        datasets.append({
-            "graph_name": graph_name,
-            "node_label": "Place",
-            "edge_label": "place_isPartOf_place_0_0",
-            "node_csv": node_csv,
-            "edge_csv": edge_csv,
-            "annotation": annotation,
-        })
-
-    # SNB s3 â€” Tagclass nodes
-    for annotation in ANNOTATION_TYPES:
-        graph_name = f"s3_{annotation}"
-        node_file = "tagclass_0_0.csv" if annotation == "plain" else f"tagclass_0_0_{annotation}.csv"
-        node_csv = os.path.join(DATA_DIR, "snb", "sf1", "nodes", node_file)
-        edge_csv = os.path.join(DATA_DIR, "snb", "sf1", "edges", "tagclass_isSubclassOf_tagclass_0_0.csv")
-        datasets.append({
-            "graph_name": graph_name,
-            "node_label": "Tagclass",
-            "edge_label": "tagclass_isSubclassOf_tagclass_0_0",
-            "node_csv": node_csv,
-            "edge_csv": edge_csv,
-            "annotation": annotation,
-        })
 
     return datasets
 
@@ -427,16 +389,16 @@ def create_neo4j_database(driver, dataset):
 
         # Create additional indexes for annotated properties
         if annotation == "dewey":
-            print(f"  Creating index on {node_label}.string_id...")
+            print(f"  Creating index on {node_label}.dewey...")
             session.run(
                 f"CREATE INDEX IF NOT EXISTS "
-                f"FOR (n:{node_label}) ON (n.string_id)"
+                f"FOR (n:{node_label}) ON (n.dewey)"
             )
         elif annotation == "prepost":
-            print(f"  Creating index on {node_label}.integer_id...")
+            print(f"  Creating index on {node_label}.pre...")
             session.run(
                 f"CREATE INDEX IF NOT EXISTS "
-                f"FOR (n:{node_label}) ON (n.integer_id)"
+                f"FOR (n:{node_label}) ON (n.pre)"
             )
 
     # Clean up preprocessed CSVs
@@ -465,9 +427,9 @@ def _build_node_query(node_label, props):
     )
 
 
-def create_neo4j_s_all_database(driver, annotation):
-    """Create and populate the s_all_{annotation} Neo4j database."""
-    graph_name = f"s_all_{annotation}"
+def create_neo4j_snb_database(driver, tree_label, annotation):
+    """Create a full SNB graph with one AGE-compatible annotated tree."""
+    graph_name = f"snb_sf1_{tree_label.lower()}_{graph_variant(annotation)}"
     db_name = to_neo4j_db_name(graph_name)
     nodes_dir = os.path.join(DATA_DIR, "snb", "sf1", "nodes")
     edges_dir = os.path.join(DATA_DIR, "snb", "sf1", "edges")
@@ -515,15 +477,16 @@ def create_neo4j_s_all_database(driver, annotation):
             print(f"    Loaded {label}")
 
         # Load tree-annotated node types
-        for label in ["Comment", "Place", "Tagclass"]:
+        for label in ["Comment", "Place", "TagClass"]:
+            label_annotation = annotation if label == tree_label else "plain"
             node_csv_src = os.path.join(
-                nodes_dir, S_ALL_TREE_NODE_FILES[(label, annotation)]
+                nodes_dir, S_ALL_TREE_NODE_FILES[(label, label_annotation)]
             )
             if not os.path.isfile(node_csv_src):
                 print(f"  SKIP {label}: CSV not found")
                 continue
 
-            columns = S_ALL_TREE_NODE_CSV_COLUMNS[(label, annotation)]
+            columns = S_ALL_TREE_NODE_CSV_COLUMNS[(label, label_annotation)]
             import_path = os.path.join(IMPORT_DIR, f"{graph_name}_{label}_nodes.csv")
             with open(node_csv_src, "r", newline="") as fin, \
                  open(import_path, "w", newline="") as fout:
@@ -537,22 +500,22 @@ def create_neo4j_s_all_database(driver, annotation):
                 f"CREATE CONSTRAINT IF NOT EXISTS "
                 f"FOR (n:{label}) REQUIRE n.id IS UNIQUE"
             )
-            props = S_ALL_TREE_NODE_PROPS[(label, annotation)]
+            props = S_ALL_TREE_NODE_PROPS[(label, label_annotation)]
             node_query = _build_node_query(label, props)
             session.run(node_query, csv_uri=f"file:///{graph_name}_{label}_nodes.csv")
             os.remove(import_path)
             loaded_labels.add(label)
 
             # Create annotation index on tree-annotated labels
-            if annotation == "dewey":
+            if label_annotation == "dewey":
                 session.run(
                     f"CREATE INDEX IF NOT EXISTS "
-                    f"FOR (n:{label}) ON (n.string_id)"
+                    f"FOR (n:{label}) ON (n.dewey)"
                 )
-            elif annotation == "prepost":
+            elif label_annotation == "prepost":
                 session.run(
                     f"CREATE INDEX IF NOT EXISTS "
-                    f"FOR (n:{label}) ON (n.integer_id)"
+                    f"FOR (n:{label}) ON (n.pre)"
                 )
             print(f"    Loaded {label}")
 
@@ -611,11 +574,15 @@ def main():
                 skipped += 1
             print()
 
-        # sf1 multi-type graphs
-        for annotation in ANNOTATION_TYPES:
-            print(f"[s_all_{annotation}]")
-            create_neo4j_s_all_database(driver, annotation)
-            print()
+        # Full SNB graphs, matching AGE's tree-specific logical graph names.
+        for tree_label in sorted(TREE_ANNOTATED_LABELS):
+            for annotation in ANNOTATION_TYPES:
+                graph_name = (
+                    f"snb_sf1_{tree_label.lower()}_{graph_variant(annotation)}"
+                )
+                print(f"[{graph_name}]")
+                create_neo4j_snb_database(driver, tree_label, annotation)
+                print()
     finally:
         driver.close()
 

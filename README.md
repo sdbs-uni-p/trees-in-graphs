@@ -118,8 +118,8 @@ On Linux, prefer using a mapped host user:
 docker exec -it -u "$(id -u):$(id -g)" -w /project kuzu_treebench python -m experiments.kuzu.kuzu_experiment_def
 ```
 
-Results are written to a timestamped folder `results/kuzu/<YYYYMMDD_HHMMSS>/raw/`.
-Reference results are stored under `results/kuzu/paper_results/raw/`.
+Results are written to `results/kuzu/<YYYYMMDD_HHMMSS>/runtimes.csv`.
+Reference results are stored under `results/kuzu/paper_results/runtimes.csv`.
 
 ### Neo4j
 
@@ -135,8 +135,8 @@ On Linux, prefer using a mapped host user:
 docker exec -it -u "$(id -u):$(id -g)" -w /project neo4j_treebench_init python -m experiments.neo4j.neo4j_experiment_def
 ```
 
-Results are written to a timestamped folder `results/neo4j/<YYYYMMDD_HHMMSS>/raw/`.
-Reference results are stored under `results/neo4j/paper_results/raw/`.
+Results are written to `results/neo4j/<YYYYMMDD_HHMMSS>/runtimes.csv`.
+Reference results are stored under `results/neo4j/paper_results/runtimes.csv`.
 
 ### Apache AGE
 
@@ -157,7 +157,7 @@ Options:
 | `--save-plans` | Save one explain plan per graph/query after measurements. |
 | `--save-results` | Save one result output per graph/query after measurements. |
 | `--save-queries` | Save rendered query files. |
-| `--parameters-file FILE` | Parameter CSV (default: `experiments/age/query_parameters.csv`). |
+| `--parameters-file FILE` | Parameter CSV (default: `experiments/query_parameters.csv`). |
 | `-h`, `--help` | Show help. |
 
 The parameter CSV uses the long format `graph,query,scenario,parameter,value`,
@@ -253,7 +253,11 @@ queries/
 │   ├── baseline/       # 4 queries
 │   ├── dewey/          # 4 queries
 │   ├── prepost/        # 4 queries
-│   └── ldbc/           # 3 official SNB queries, original (cypher) and adapted for AGE (sql)
+├── age_ldbc/
+│   ├── baseline/       # 3 official SNB queries adapted for AGE
+│   ├── dewey/          # 3 official SNB queries with Dewey annotations
+│   ├── original/       # 3 original Cypher queries
+│   └── prepost/        # 3 official SNB queries with PrePost annotations
 ├── kuzu/
 │   ├── baseline/       # 12 queries
 │   ├── dewey/          # 12 queries
@@ -264,7 +268,9 @@ queries/
     └── prepost/        # 12 queries
 ```
 
-Neo4j and Kuzu each implement 10 distinct operations per encoding (30 files each); AGE implements a subset of 4 operations per encoding (12 files total).
+Kuzu and Neo4j each implement 10 regular tree operations per encoding. AGE
+implements only 4 regular tree operations per encoding: `01`, `02`, `05`, and
+`11`. LDBC and maintenance are separate workloads with their own query names.
 
 ### Encoding Schemes
 
@@ -278,7 +284,9 @@ Each database system implements the same logical operations under three differen
 
 ### Query Naming
 
-Files follow the pattern `{NN}_{operation}.sql`, where the numeric prefix groups equivalent operations across schemes and systems:
+Tree query files follow the pattern `{NN}_{operation}.sql`, where the numeric
+prefix groups equivalent tree operations across the baseline, Dewey, and
+PrePost implementations:
 
 | ID | Operation |
 |---|---|
@@ -293,6 +301,10 @@ Files follow the pattern `{NN}_{operation}.sql`, where the numeric prefix groups
 | `12` | `check_same_subtree` (negative case) |
 | `14` | `check_if_ancestor` (negative case) |
 
+Official LDBC query files use names such as `interactive-short-2.sql`,
+`interactive-short-6.sql`, and `interactive-complex-12.sql` rather than the
+tree-operation numbers.
+
 ### Comparing Queries across Systems and Schemes
 
 To compare queries that implement the same logical operation, open the three scheme variants side-by-side. For example, for `all_descendants` on Neo4j:
@@ -303,7 +315,8 @@ queries/neo4j/dewey/01_all_descendants.sql
 queries/neo4j/prepost/01_all_descendants.sql
 ```
 
-The numeric prefix is stable across systems, so the same ID in `queries/kuzu/baseline/` and `queries/age/baseline/` implements the same logical operation — making cross-system, same-scheme comparisons straightforward as well.
+The numeric prefix is stable across the regular tree-query implementations.
+LDBC queries are compared within the LDBC workload.
 
 All queries are parameterised (e.g. `$NODE_TYPE`, `$rootID`); the experiment runners substitute concrete values at runtime.
 
@@ -388,6 +401,25 @@ This CSV is the AGE input used by the cross-system comparison scripts below.
 #### Experiments on Official LDBC SNB Queries
 
 The three committed interactive LDBC SNB queries are available as original Cypher under `queries/age_ldbc/original/` and as Apache AGE SQL under `queries/age_ldbc/{baseline,dewey,prepost}/`. New benchmark outputs are stored under `results/age_ldbc/`.
+
+#### LDBC reports
+
+Each native Kuzu or Neo4j LDBC run contains `runtimes.csv`, `metadata.json`,
+`runtime_tables.pdf`, and, unless disabled, `queries/`, `plans/`, `results/`,
+and `errors/`. AGE LDBC runs use the same `runtimes.csv` format under
+`results/age_ldbc/`.
+
+Regenerate an LDBC runtime table from a completed run with:
+
+```bash
+python scripts/create_runtime_tables.py \
+  results/kuzu_ldbc/<YYYYMMDD_HHMMSS>/runtimes.csv \
+  results/kuzu_ldbc/<YYYYMMDD_HHMMSS>/runtime_tables.pdf
+```
+
+Use the corresponding `results/neo4j_ldbc/` or `results/age_ldbc/` path for
+the other systems. The report compares Baseline, Dewey, and Prepost median
+runtimes for the three interactive queries and renders Dewey/Prepost speedups.
 
 ### Cross-system Comparisons
 

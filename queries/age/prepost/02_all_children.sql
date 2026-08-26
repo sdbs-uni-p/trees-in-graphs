@@ -7,6 +7,6 @@ WITH root AS (
 )
 SELECT (c.properties ->> '"__id__"'::agtype)::bigint AS id, c.pre, c.post, c.depth
 FROM :"graphname".:"nodetype" c, root r
-WHERE c.pre  >  r.pre
-  AND c.post < r.post
+WHERE c.pre > r.pre
+  AND c.pre < r.post
   AND c.depth = r.depth + 1;

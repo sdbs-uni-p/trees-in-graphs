@@ -4,7 +4,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from experiments.experiement_infrastructure import assess_db, Neo4jExecutor, ReducedKuzuParametrizer
+from experiments.experiement_infrastructure import Neo4jExecutor, run_fixed_scenarios
 
 # Add parent directory to path for imports when running as script
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -44,12 +44,16 @@ def get_config():
         "paths": {
             "project": Path(os.getenv("PROJECT_PATH", str(default_project_path))),
             "queries_subpath": os.getenv("QUERIES_SUBPATH", "queries/neo4j"),
-            "results_subpath": os.getenv("RESULTS_SUBPATH", f"results/neo4j/{datetime.now().strftime('%Y%m%d_%H%M%S')}/raw"),
+            "results_subpath": os.getenv("RESULTS_SUBPATH", f"results/neo4j/{datetime.now().strftime('%Y%m%d_%H%M%S')}"),
             "metadata_subpath": os.getenv("METADATA_SUBPATH", "data/graph_metadata"),
+            "parameters_subpath": os.getenv("PARAMETERS_SUBPATH", "experiments/query_parameters.csv"),
         },
         "experiment": {
             "heat": int(os.getenv("EXPERIMENT_HEAT", "0")),
             "n": int(os.getenv("EXPERIMENT_N", "5")),
+            "save_plans": os.getenv("SAVE_PLANS", "1") == "1",
+            "save_results": os.getenv("SAVE_RESULTS", "1") == "1",
+            "save_queries": os.getenv("SAVE_QUERIES", "1") == "1",
         }
     }
 
@@ -69,6 +73,7 @@ def run_experiment(config=None):
     query_path = project_path / paths["queries_subpath"]
     result_log_base = project_path / paths["results_subpath"]
     metadata_path = project_path / paths["metadata_subpath"]
+    parameters_path = project_path / paths["parameters_subpath"]
 
     # Ensure results directory exists
     result_log_base.mkdir(parents=True, exist_ok=True)
@@ -79,6 +84,7 @@ def run_experiment(config=None):
     print(f"  Query Path: {query_path}")
     print(f"  Results Path: {result_log_base}")
     print(f"  Metadata Path: {metadata_path}")
+    print(f"  Parameters Path: {parameters_path}")
 
     # Create executors â€” all three share the same driver connection;
     # set_graph() in assess_db will point each to the right database
@@ -100,17 +106,20 @@ def run_experiment(config=None):
         password=db_config["password"],
     )
 
-    assess_db(
-        plain_ex=plain_ne,
-        dewey_ex=dewey_ne,
-        prepost_ex=prepost_ne,
-        result_log_base=result_log_base,
+    run_fixed_scenarios(
+        {"baseline": plain_ne, "dewey": dewey_ne, "prepost": prepost_ne},
         query_path=query_path,
-        metadata_path=metadata_path,
+        parameters_path=parameters_path,
+        output_path=result_log_base / "runtimes.csv",
         heat=exp_config["heat"],
-        n=exp_config["n"],
-        parametrizer_cls=ReducedKuzuParametrizer
+        runs=exp_config["n"],
+        save_plans=exp_config["save_plans"],
+        save_results=exp_config["save_results"],
+        save_queries=exp_config["save_queries"],
     )
+
+    for executor in (plain_ne, dewey_ne, prepost_ne):
+        executor.driver.close()
 
 
 if __name__ == "__main__":

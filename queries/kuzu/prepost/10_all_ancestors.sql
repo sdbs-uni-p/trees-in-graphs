@@ -1,8 +1,7 @@
 -- SPDX-License-Identifier: GPL-3.0-only
 
-MATCH (node:$NODE_TYPE {integer_id: $prepostId})
-WITH node.integer_id AS targetId
+MATCH (node:$NODE_TYPE {pre: $prepostId})
 MATCH (ancestor:$NODE_TYPE)
-WHERE ancestor.integer_id < targetId
-AND ancestor.upper_bound >= targetId
+WHERE ancestor.pre < node.pre
+AND node.pre < ancestor.post
 RETURN ancestor
