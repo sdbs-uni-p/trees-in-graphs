@@ -38,7 +38,9 @@ SCENARIO_ORDER = {
     "q06": 5,
     "q07": 6,
     "q08": 7,
-    "unknown": 8,
+    "q09": 8,
+    "q10": 9,
+    "unknown": 10,
 }
 PARAMETER_LABELS = {
     "q01_q02": "Root of largest/deepest tree",
@@ -51,8 +53,13 @@ PARAMETER_LABELS = {
     "q06": "Lowest-degree node",
     "q07": "Root-farthest-leaf pair",
     "q08": "Deepest parent-leaf pair",
+    "q09": "Shallow sibling pair",
+    "q10": "Most distant leaf pair",
     "unknown": "Unknown",
 }
+
+ANCESTOR_POSITIVE_SCENARIOS = frozenset(("q07", "q08"))
+ANCESTOR_NEGATIVE_SCENARIOS = frozenset(("q09", "q10"))
 
 
 def split_graph(graph):
@@ -125,9 +132,13 @@ def load_groups(path):
     return groups
 
 
-def make_rows(groups, query):
+def make_rows(groups, query, scenarios=None):
     keys = sorted(
-        {(graph, scenario) for graph, q, scenario, _ in groups if q == query},
+        {
+            (graph, scenario)
+            for graph, q, scenario, _ in groups
+            if q == query and (scenarios is None or scenario in scenarios)
+        },
         key=lambda item: (graph_sort_key(item[0]), SCENARIO_ORDER[item[1]], item[1]),
     )
     output = []
@@ -159,6 +170,41 @@ def make_rows(groups, query):
     return output
 
 
+def report_pages(groups):
+    available = {
+        (query, scenario)
+        for _, query, scenario, _ in groups
+    }
+    pages = [
+        (QUERY_LABELS[query], query, None)
+        for query in QUERY_ORDER
+        if query != "11_check_if_ancestor"
+        and any(available_query == query for available_query, _ in available)
+    ]
+    available_ancestor_scenarios = {
+        scenario
+        for query, scenario in available
+        if query == "11_check_if_ancestor"
+    }
+    if available_ancestor_scenarios & ANCESTOR_POSITIVE_SCENARIOS:
+        pages.append(
+            (
+                "Query 11 - Check if Ancestor (Positive)",
+                "11_check_if_ancestor",
+                ANCESTOR_POSITIVE_SCENARIOS,
+            )
+        )
+    if available_ancestor_scenarios & ANCESTOR_NEGATIVE_SCENARIOS:
+        pages.append(
+            (
+                "Query 11 - Check if Ancestor (Negative)",
+                "11_check_if_ancestor",
+                ANCESTOR_NEGATIVE_SCENARIOS,
+            )
+        )
+    return pages
+
+
 def groff_document(groups):
     lines = [
         ".pl 16.54i",
@@ -171,7 +217,7 @@ def groff_document(groups):
     headings = (
         "Graph@Parameters@Baseline@Dewey@Prepost@Speedup Dewey@Speedup Prepost"
     )
-    for page_number, query in enumerate(QUERY_ORDER):
+    for page_number, (title, query, scenarios) in enumerate(report_pages(groups)):
         if page_number:
             lines.append(".bp")
         lines.extend(
@@ -179,7 +225,7 @@ def groff_document(groups):
                 ".sp 0.25i",
                 ".ce 1",
                 ".ps 16",
-                f"\\fB{QUERY_LABELS[query]}\\fP",
+                f"\\fB{title}\\fP",
                 ".sp 0.15i",
                 ".ps 9.5",
                 ".vs 11p",
@@ -192,7 +238,7 @@ def groff_document(groups):
                 ".TH",
             ]
         )
-        rows = make_rows(groups, query)
+        rows = make_rows(groups, query, scenarios)
         has_timeout = any(">6 h" in row for row in rows)
         has_lower_bound = any(value.startswith(">") for row in rows for value in row[5:])
         has_double_timeout = any(value == "–" for row in rows for value in row[5:])
@@ -456,11 +502,12 @@ def main():
             fieldnames = csv.DictReader(handle).fieldnames or []
         if "scenario" in fieldnames:
             groups = load_groups(args.input)
-            available_queries = {key[1] for key in groups}
-            missing = set(QUERY_ORDER) - available_queries
-            if missing:
-                raise ValueError(f"Missing queries: {sorted(missing)}")
-            pages = [(QUERY_LABELS[query], make_rows(groups, query), None, None) for query in QUERY_ORDER]
+            pages = [
+                (title, make_rows(groups, query, scenarios), None, None)
+                for title, query, scenarios in report_pages(groups)
+            ]
+            if not pages:
+                raise ValueError("No supported query scenarios found")
         else:
             pages = [(
                 "LDBC SNB SF1",

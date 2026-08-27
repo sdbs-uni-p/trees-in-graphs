@@ -3,10 +3,13 @@
 """Run Kuzu/Neo4j with the fixed parameter scenarios shared with AGE."""
 
 import csv
+import fnmatch
 import json
 import re
 from collections import defaultdict
 from pathlib import Path
+
+from tqdm import tqdm
 
 
 QUERY_FILES = {
@@ -16,6 +19,16 @@ QUERY_FILES = {
     "11_check_if_ancestor": "11_check_if_ancestor_true.sql",
 }
 METHODS = ("baseline", "dewey", "prepost")
+
+
+def _matches_filter(value, pattern_list):
+    if not pattern_list:
+        return True
+    return any(
+        fnmatch.fnmatchcase(value, pattern.strip())
+        for pattern in pattern_list.split(",")
+        if pattern.strip()
+    )
 
 
 def _graph_labels(graph):
@@ -123,6 +136,7 @@ def run_fixed_scenarios(
     save_plans=True,
     save_results=True,
     save_queries=True,
+    scenario_filter="",
 ):
     """Execute exactly the graph/query/scenario combinations from the shared CSV."""
     scenarios = load_parameter_scenarios(parameters_path)
@@ -150,9 +164,29 @@ def run_fixed_scenarios(
         writer = csv.writer(handle)
         writer.writerow(["graph", "query", "scenario", "run", "runtime_ms"])
 
-        for (graph, query_name, scenario), plain_values in scenarios.items():
-            if query_name not in QUERY_FILES:
-                continue
+        selected_scenarios = [
+            (key, values)
+            for key, values in scenarios.items()
+            if key[1] in QUERY_FILES and _matches_filter(key[2], scenario_filter)
+        ]
+        graph_names = list(dict.fromkeys(key[0] for key, _ in selected_scenarios))
+        progress = tqdm(
+            total=len(graph_names),
+            desc="Processing string graphs",
+        )
+        previous_graph = None
+        previous_query = None
+        for (graph, query_name, scenario), plain_values in selected_scenarios:
+            if graph != previous_graph:
+                if previous_graph is not None:
+                    progress.update()
+                print(f"Processing {graph}_dewey")
+                previous_graph = graph
+                previous_query = None
+            if query_name != previous_query:
+                description = Path(QUERY_FILES[query_name]).stem[3:]
+                print(f"Processing {description}")
+                previous_query = query_name
             node_label, relation_label = _graph_labels(graph)
             for method in METHODS:
                 executor = executors[method]
@@ -212,5 +246,9 @@ def run_fixed_scenarios(
                             artifact_dirs["errors"] / f"{stem}_plan.log",
                             f"{type(exc).__name__}: {exc}",
                         )
+
+        if previous_graph is not None:
+            progress.update()
+        progress.close()
 
     return output_path

@@ -3,11 +3,13 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 usage() {
 	cat <<'EOF'
 Usage: export_dewey_top20.sh [OPTIONS]
 
-Exports eight Top-20 reports for every AGE graph whose name ends in _dewey.
+Exports ten Top-20 reports for every AGE graph whose name ends in _dewey.
 
 Options:
 	-d, --datasets LIST  Comma-separated graph/base-name filters (globs allowed).
@@ -244,6 +246,44 @@ for graph in "${GRAPHS[@]}"; do
 		JOIN node_stats p ON p.dewey = l.parent_dewey
 		ORDER BY depth DESC, l.id
 		LIMIT 20" "$graph_dir/08_leaves_with_parent_by_depth.csv"
+
+	# A NULL parent_dewey groups all roots below one imaginary parent.  LEAD
+	# produces a linear number of representative sibling pairs instead of the
+	# quadratic number of all equivalent combinations within a sibling group.
+	export_csv "$nodes_cte,
+		sibling_nodes AS (
+			SELECT n.id, n.dewey,
+			       CASE WHEN p.id IS NULL THEN NULL ELSE n.parent_dewey END
+			           AS common_parent_dewey,
+			       CASE WHEN p.id IS NULL THEN 0 ELSE n.depth END::bigint
+			           AS sibling_depth
+			FROM nodes n
+			LEFT JOIN nodes p ON p.dewey = n.parent_dewey
+		),
+		sibling_candidates AS (
+			SELECT id AS id1, dewey AS dewey1,
+			       lead(id) OVER (PARTITION BY common_parent_dewey ORDER BY id) AS id2,
+			       lead(dewey) OVER (PARTITION BY common_parent_dewey ORDER BY id) AS dewey2,
+			       common_parent_dewey,
+			       sibling_depth
+			FROM sibling_nodes
+		)
+		SELECT id1, dewey1, id2, dewey2,
+		       common_parent_dewey, sibling_depth
+		FROM sibling_candidates
+		WHERE id2 IS NOT NULL
+		ORDER BY sibling_depth ASC, id1, id2
+		LIMIT 20" "$graph_dir/09_shallow_siblings.csv"
+
+	# Stream the Dewey-ordered nodes through a bottom-up tree-diameter
+	# calculation.  This avoids materializing every leaf/ancestor combination
+	# and the subsequent endpoint self-join in PostgreSQL.
+	"${PSQL[@]}" -At -F $'\t' -c "$nodes_cte
+		SELECT id, dewey
+		FROM nodes
+		ORDER BY string_to_array(dewey, '.'), id" |
+		python3 "$SCRIPT_DIR/find_distant_leaves.py" \
+			"$graph_dir/10_distant_leaves.csv"
 
 	echo "Exported $graph (label=$node_label) to $graph_dir"
 done

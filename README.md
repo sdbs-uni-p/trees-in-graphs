@@ -133,6 +133,17 @@ docker exec -it -u "$(id -u):$(id -g)" -w /project kuzu_treebench python -m expe
 Results are written to `results/kuzu/<YYYYMMDD_HHMMSS>/runtimes.csv`.
 Reference results are stored under `results/kuzu/paper_results/runtimes.csv`.
 
+To run only the negative ancestor scenarios without warmup, with five measured
+runs and all artifacts enabled:
+
+```bash
+docker exec -u "$(id -u):$(id -g)" -w /project \
+  -e SCENARIO_FILTER=q09,q10 \
+  -e EXPERIMENT_HEAT=0 -e EXPERIMENT_N=5 \
+  -e SAVE_QUERIES=1 -e SAVE_PLANS=1 -e SAVE_RESULTS=1 \
+  kuzu_treebench python -m experiments.kuzu.kuzu_experiment_def
+```
+
 ### Neo4j
 
 Execute the experiment runner inside the init container from the project root:
@@ -149,6 +160,17 @@ docker exec -it -u "$(id -u):$(id -g)" -w /project neo4j_treebench_init python -
 
 Results are written to `results/neo4j/<YYYYMMDD_HHMMSS>/runtimes.csv`.
 Reference results are stored under `results/neo4j/paper_results/runtimes.csv`.
+
+To run only the negative ancestor scenarios without warmup, with five measured
+runs and all artifacts enabled:
+
+```bash
+docker exec -u "$(id -u):$(id -g)" -w /project \
+  -e SCENARIO_FILTER=q09,q10 \
+  -e EXPERIMENT_HEAT=0 -e EXPERIMENT_N=5 \
+  -e SAVE_QUERIES=1 -e SAVE_PLANS=1 -e SAVE_RESULTS=1 \
+  neo4j_treebench_init python -m experiments.neo4j.neo4j_experiment_def
+```
 
 ### Apache AGE
 
@@ -182,6 +204,28 @@ encoding suffix (`_baseline`, `_dewey`, or `_prepost`), so one parameter group
 applies to all three representations. The current queries require `rootid`
 (queries 01, 02, and 05) or `id1` and `id2` (query 11).
 
+The fixed parameter scenarios are:
+
+| Scenario | Parameters | Used by |
+|---|---|---|
+| `q01` | Root of the largest tree | Queries 01 and 05 |
+| `q02` | Root of the deepest tree | Queries 01 and 05 |
+| `q03` | Parent of leaves with high degree | Queries 01 and 05 |
+| `q04` | Parent of leaves with low degree | Queries 01 and 05 |
+| `q05` | Node with the highest degree | Query 02 |
+| `q06` | Node with the lowest degree | Query 02 |
+| `q07` | Root and a farthest leaf | Query 11 (`true`, long positive case) |
+| `q08` | Parent and a deep direct child | Query 11 (`true`, short positive case) |
+| `q09` | Shallow siblings; roots of different trees are siblings below an imaginary parent | Query 11 (`false`, short negative case, `shallow_siblings`) |
+| `q10` | Leaves maximizing the sum of their distances to their lowest common ancestor, which may be the imaginary parent | Query 11 (`false`, long negative case, `distant_leaves`) |
+
+For `11_check_if_ancestor`, the relationship is checked in both directions:
+the result is true if either node is an ancestor of the other.
+
+The `q09` and `q10` parameters are selected deterministically from the first
+rows of the corresponding Top-20 reports under
+`results/age/dewey_top20/<graph>_dewey/`.
+
 Reproducing The Paper Setup:
 
 ```bash
@@ -204,6 +248,30 @@ docker exec -it -u "$(id -u):$(id -g)" -w /experiments age_treebench bash run_ex
 
 Results are written to a timestamped folder `results/age/<YYYYMMDD_HHMMSS>`.
 Reference results for the paper setup are stored under `results/age/paper_results/`.
+
+Create a runtime-table PDF from a completed five-run result CSV with:
+
+```bash
+python scripts/create_runtime_tables.py \
+  results/age/<YYYYMMDD_HHMMSS>/runtimes.csv \
+  results/age/<YYYYMMDD_HHMMSS>/runtime_tables.pdf
+```
+
+The script accepts both complete benchmark CSVs and query-specific CSVs. When
+`q09` or `q10` is present, Query 11 is rendered on separate positive and
+negative pages so that each page retains the existing two-scenarios-per-graph
+layout. Creating the PDF requires `rsvg-convert` and `pdfunite`.
+
+For a combined AGE/Kuzu/Neo4j PDF, all three completed five-run CSVs must
+contain the same scenarios:
+
+```bash
+python scripts/create_combined_runtime_tables.py \
+  --age results/age/<run>/runtimes.csv \
+  --kuzu results/kuzu/<run>/runtimes.csv \
+  --neo4j results/neo4j/<run>/runtimes.csv \
+  --output results/combined/<run>/runtime_tables.pdf
+```
 
 #### AGE maintenance experiments
 

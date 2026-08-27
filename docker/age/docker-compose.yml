@@ -21,6 +21,7 @@ services:
       - ../../data:/data:rw
       - ./init:/opt/age-init:ro
       - ../../experiments/age:/experiments:rw
+      - ../../experiments/query_parameters.csv:/query_parameters.csv:ro
       - ../../queries/age:/queries:rw
       - ../../results:/results:rw
     restart: unless-stopped

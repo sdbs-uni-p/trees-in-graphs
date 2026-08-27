@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create combined AGE/Kuzu/Neo4j runtime tables as a four-page PDF."""
+"""Create combined AGE/Kuzu/Neo4j runtime tables as a multi-page PDF."""
 
 import argparse
 import csv
@@ -47,6 +47,11 @@ SCENARIOS = {
         ("deep", "Deepest parent-leaf pair", ("q08",)),
     ),
 }
+
+ANCESTOR_NEGATIVE_SCENARIOS = (
+    ("shallow", "Shallow sibling pair", ("q09",)),
+    ("distant", "Most distant leaf pair", ("q10",)),
+)
 
 
 def split_graph(graph):
@@ -128,13 +133,13 @@ def format_speedup(baseline, method):
     return f"{baseline / method:,.3f}x"
 
 
-def make_rows(system_medians, query):
+def make_rows(system_medians, query, scenarios=None):
     graphs = set.intersection(
         *({key[0] for key in medians if key[1] == query} for medians in system_medians.values())
     )
     rows = []
     for graph in sorted(graphs, key=graph_sort_key):
-        for _, parameter_label, candidates in SCENARIOS[query]:
+        for _, parameter_label, candidates in scenarios or SCENARIOS[query]:
             row = [graph_label(graph), parameter_label]
             for system in SYSTEMS:
                 medians = system_medians[system]
@@ -156,50 +161,162 @@ def make_rows(system_medians, query):
     return rows
 
 
+def report_pages(system_medians):
+    scenario_sets = [
+        {(key[1], key[2]) for key in medians}
+        for medians in system_medians.values()
+    ]
+    common_scenarios = set.intersection(*scenario_sets)
+    all_scenarios = set.union(*scenario_sets)
+
+    def supports(query, scenarios):
+        return all(
+            any((query, candidate) in common_scenarios for candidate in candidates)
+            for _, _, candidates in scenarios
+        )
+
+    pages = []
+    for query in QUERIES:
+        scenarios = SCENARIOS[query]
+        if supports(query, scenarios):
+            title = QUERY_LABELS[query]
+            if query == "11_check_if_ancestor" and any(
+                pair[0] == query and pair[1] in {"q09", "q10"}
+                for pair in all_scenarios
+            ):
+                title = "Query 11 - Check if Ancestor (Positive)"
+            pages.append((title, query, scenarios))
+
+    negative_query = "11_check_if_ancestor"
+    negative_names = {"q09", "q10"}
+    has_any_negative = any(
+        query == negative_query and scenario in negative_names
+        for query, scenario in all_scenarios
+    )
+    if has_any_negative:
+        if not supports(negative_query, ANCESTOR_NEGATIVE_SCENARIOS):
+            raise ValueError(
+                "q09/q10 must be present in all AGE, Kuzu, and Neo4j inputs"
+            )
+        pages.append(
+            (
+                "Query 11 - Check if Ancestor (Negative)",
+                negative_query,
+                ANCESTOR_NEGATIVE_SCENARIOS,
+            )
+        )
+    if not pages:
+        raise ValueError("No common supported query scenarios found")
+    return pages
+
+
 def numeric_speedup(text):
     if text == "–":
         return None
     return float(text.lstrip(">").rstrip("x").replace(",", ""))
 
 
-def svg_page(title, rows):
-    width, height = 1191, 842
-    left, top = 30, 52
-    header_height, subheader_height, row_height = 21, 19, 15
-    widths = [50, 126] + [62, 62, 62, 68, 68] * 3
+def svg_label(value):
+    indexed = {
+        "Q_desc": ("Q", "desc"),
+        "Q_a&d": ("Q", "a&amp;d"),
+        "S_D": ("S", "D"),
+        "S_P": ("S", "P"),
+    }
+    if value not in indexed:
+        return html.escape(value)
+    symbol, index = indexed[value]
+    return (
+        f"{symbol}<tspan baseline-shift=\"sub\" font-size=\"6\">"
+        f"{index}</tspan>"
+    )
+
+
+def svg_rich_text(value):
+    rendered = html.escape(value)
+    for token in ("Q_desc", "Q_a&d", "S_D", "S_P"):
+        rendered = rendered.replace(html.escape(token), svg_label(token))
+    return rendered
+
+
+def svg_page(
+    title,
+    rows,
+    leading_headings=("Graph", "Parameters"),
+    graph_notes=True,
+    leading_widths=None,
+    metric_widths=None,
+    subheadings=None,
+    notes_override=None,
+    row_height=15,
+    table_only=False,
+    fit_content=False,
+):
+    header_height, subheader_height = 21, 19
+    if leading_widths is None:
+        leading_widths = [50, 126]
+    if metric_widths is None:
+        metric_widths = [62, 62, 62, 68, 68]
+    if len(metric_widths) == 5:
+        metric_widths = list(metric_widths) * 3
+    elif len(metric_widths) != 15:
+        raise ValueError("metric_widths must contain 5 or 15 widths")
+    widths = list(leading_widths) + list(metric_widths)
     table_width = sum(widths)
+    total_header = header_height + subheader_height
+    if table_only:
+        left, top = 1, 1
+        width = table_width + 2
+        height = total_header + len(rows) * row_height + 2
+        physical_size = f'width="{width}" height="{height}"'
+    elif fit_content:
+        left, top = 30, 52
+        width = max(table_width + 60, 920)
+        height = top + total_header + len(rows) * row_height + 130
+        physical_size = f'width="{width}" height="{height}"'
+    else:
+        width, height = 1191, 842
+        left, top = 30, 52
+        physical_size = 'width="420mm" height="297mm"'
     xs = [left]
     for value in widths:
         xs.append(xs[-1] + value)
     parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="297mm" viewBox="0 0 {width} {height}">',
+        f'<svg xmlns="http://www.w3.org/2000/svg" {physical_size} viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="white"/>',
         '<g font-family="Arial, Helvetica, sans-serif" fill="#111">',
-        f'<text x="{width / 2}" y="30" text-anchor="middle" font-size="16" font-weight="bold">{html.escape(title)}</text>',
     ]
-    total_header = header_height + subheader_height
+    if not table_only:
+        parts.append(
+            f'<text x="{left + table_width / 2}" y="30" text-anchor="middle" font-size="16" '
+            f'font-weight="bold">{html.escape(title)}</text>'
+        )
     parts.append(
         f'<rect x="{left}" y="{top}" width="{table_width}" height="{total_header}" '
         'fill="#eeeeee" stroke="#111"/>'
     )
-    for index, heading in enumerate(("Graph", "Parameters")):
+    for index, heading in enumerate(leading_headings):
         center = (xs[index] + xs[index + 1]) / 2
         parts.append(
-            f'<text x="{center}" y="{top + 25}" text-anchor="middle" font-size="8.2">{heading}</text>'
+            f'<text x="{center}" y="{top + total_header / 2}" text-anchor="middle" '
+            f'dominant-baseline="middle" font-size="8.2">{heading}</text>'
         )
-    subheadings = (
-        "Baseline (ms)",
-        "Dewey (ms)",
-        "Prepost (ms)",
-        "Speedup Dewey",
-        "Speedup Prepost",
-    )
+    if subheadings is None:
+        subheadings = (
+            "Baseline (ms)",
+            "Dewey (ms)",
+            "Prepost (ms)",
+            "Speedup Dewey",
+            "Speedup Prepost",
+        )
+    leading_columns = len(leading_headings)
     for system_index, system in enumerate(SYSTEMS):
-        start_column = 2 + system_index * 5
+        start_column = leading_columns + system_index * 5
         group_left, group_right = xs[start_column], xs[start_column + 5]
         parts.append(
-            f'<text x="{(group_left + group_right) / 2}" y="{top + 14}" '
-            f'text-anchor="middle" font-size="9" font-weight="bold">{system}</text>'
+            f'<text x="{(group_left + group_right) / 2}" y="{top + header_height / 2}" '
+            f'text-anchor="middle" dominant-baseline="middle" font-size="9" '
+            f'font-weight="bold">{system}</text>'
         )
         parts.append(
             f'<line x1="{group_left}" y1="{top + header_height}" x2="{group_right}" '
@@ -208,10 +325,15 @@ def svg_page(title, rows):
         for offset, heading in enumerate(subheadings):
             column = start_column + offset
             parts.append(
-                f'<text x="{(xs[column] + xs[column + 1]) / 2}" y="{top + 34}" '
-                f'text-anchor="middle" font-size="7.7">{heading}</text>'
+                f'<text x="{(xs[column] + xs[column + 1]) / 2}" '
+                f'y="{top + header_height + subheader_height / 2}" text-anchor="middle" '
+                f'dominant-baseline="middle" font-size="7.7">{svg_label(heading)}</text>'
             )
-    speedup_columns = {5, 6, 10, 11, 15, 16}
+    speedup_columns = {
+        leading_columns + system_index * 5 + offset
+        for system_index in range(len(SYSTEMS))
+        for offset in (3, 4)
+    }
     previous_graph = None
     for row_index, row in enumerate(rows):
         y = top + total_header + row_index * row_height
@@ -228,11 +350,11 @@ def svg_page(title, rows):
                 f'<rect x="{xs[column]}" y="{y}" width="{widths[column]}" height="{row_height}" '
                 f'fill="{fill}" stroke="#444" stroke-width="0.4"/>'
             )
-            right = column >= 2
-            x = xs[column + 1] - 3 if right else xs[column] + 3
-            anchor = "end" if right else "start"
+            numeric = column >= leading_columns
+            center_x = (xs[column] + xs[column + 1]) / 2
+            center_y = y + row_height / 2
             weight = "bold" if value.startswith(">") else "normal"
-            if right:
+            if numeric:
                 # Preserve the original table renderer's fixed-width numeric
                 # positioning instead of relying on proportional digits.
                 advance = 4.15
@@ -241,18 +363,20 @@ def svg_page(title, rows):
                     f'font-weight="{weight}" fill="{foreground}">'
                 )
                 for character_index, character in enumerate(value):
-                    character_x = x - (len(value) - character_index - 0.5) * advance
+                    character_x = xs[column + 1] - 3 - (
+                        len(value) - character_index - 0.5
+                    ) * advance
                     parts.append(
-                        f'<text x="{character_x}" y="{y + 10.8}" '
-                        f'text-anchor="middle" font-size="8.2">'
+                        f'<text x="{character_x}" y="{center_y}" text-anchor="middle" '
+                        f'dominant-baseline="middle" font-size="8.2">'
                         f'{html.escape(character)}</text>'
                     )
                 parts.append("</g>")
             else:
                 parts.append(
-                    f'<text x="{x}" y="{y + 10.8}" text-anchor="{anchor}" '
-                    f'font-size="8.2" font-weight="{weight}" '
-                    f'fill="{foreground}">{html.escape(value)}</text>'
+                    f'<text x="{xs[column] + 3}" y="{center_y}" text-anchor="start" '
+                    f'dominant-baseline="middle" font-size="8.2" font-weight="{weight}" '
+                    f'fill="{foreground}">{svg_label(value)}</text>'
                 )
         if previous_graph is not None and row[0] != previous_graph:
             parts.append(
@@ -261,7 +385,11 @@ def svg_page(title, rows):
             )
         previous_graph = row[0]
     bottom = top + total_header + len(rows) * row_height
-    group_boundaries = (0, 1, 2, 7, 12, 17)
+    group_boundaries = {
+        0,
+        *range(1, leading_columns + 1),
+        *(leading_columns + system_index * 5 for system_index in range(len(SYSTEMS) + 1)),
+    }
     for column, x in enumerate(xs):
         stroke_width = "1.2" if column in group_boundaries else "0.55"
         line_top = top if column in group_boundaries else top + header_height
@@ -269,6 +397,9 @@ def svg_page(title, rows):
             f'<line x1="{x}" y1="{line_top}" x2="{x}" y2="{bottom}" '
             f'stroke="#222" stroke-width="{stroke_width}"/>'
         )
+    if table_only:
+        parts.extend(("</g>", "</svg>"))
+        return "\n".join(parts)
     has_runtime_timeout = any(">6 h" in value for row in rows for value in row)
     has_lower_bound = any(
         row[column].startswith(">")
@@ -290,14 +421,17 @@ def svg_page(title, rows):
         timeout_parts.append('"–" means both methods timed out')
     if timeout_parts:
         notes.append("Timeouts: " + "; ".join(timeout_parts) + ".")
-    notes.append(
-        "Graphs: F = forest; NT = truebase; DT = ultratall; WT = ultrawide; "
-        "SNB/C, SNB/P, SNB/T = SNB SF1 trees."
-    )
+    if graph_notes:
+        notes.append(
+            "Graphs: F = forest; NT = truebase; DT = ultratall; WT = ultrawide; "
+            "SNB/C, SNB/P, SNB/T = SNB SF1 trees; SNB = full SNB SF1 graph."
+        )
+    if notes_override is not None:
+        notes = list(notes_override)
     for index, note in enumerate(notes):
         parts.append(
             f'<text x="{left}" y="{bottom + 17 + index * 12}" '
-            f'font-size="7.5">{html.escape(note)}</text>'
+            f'font-size="7.5">{svg_rich_text(note)}</text>'
         )
     legend_y = bottom + 75
     label_width, bar_width, bar_height = 95, 360, 12
@@ -352,6 +486,71 @@ def svg_page(title, rows):
     return "\n".join(parts)
 
 
+def load_ldbc_medians(path):
+    values = defaultdict(list)
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        for row in csv.DictReader(handle):
+            graph, method = split_graph(row["graph"].strip())
+            if graph != "snb_sf1":
+                raise ValueError(f"Unexpected LDBC graph: {graph}")
+            runtime = row["runtime_ms"].strip()
+            values[(row["query"].strip(), method)].append(
+                None if not runtime else float(runtime)
+            )
+
+    medians = {}
+    for key, runs in values.items():
+        if len(runs) != 5:
+            raise ValueError(f"Expected five runs for {key}, found {len(runs)}")
+        if any(value is None for value in runs):
+            if not all(value is None for value in runs):
+                raise ValueError(f"Partial timeout for {key}")
+            medians[key] = None
+        else:
+            medians[key] = statistics.median(runs)
+    return medians
+
+
+def make_ldbc_rows(system_medians):
+    query_sets = [
+        {query for query, _ in medians}
+        for medians in system_medians.values()
+    ]
+    if not query_sets or any(queries != query_sets[0] for queries in query_sets[1:]):
+        raise ValueError("LDBC queries must match in all AGE, Kuzu, and Neo4j inputs")
+
+    def query_sort_key(query):
+        kind, number = query.rsplit("-", 1)
+        return (0 if kind.endswith("complex") else 1, int(number))
+
+    rows = []
+    for query in sorted(query_sets[0], key=query_sort_key):
+        if query.startswith("interactive-complex-"):
+            short = "IC" + query.rsplit("-", 1)[1]
+            label = "Interactive Complex " + query.rsplit("-", 1)[1]
+        elif query.startswith("interactive-short-"):
+            short = "IS" + query.rsplit("-", 1)[1]
+            label = "Interactive Short " + query.rsplit("-", 1)[1]
+        else:
+            short = query
+            label = query
+        row = [short, label]
+        for system in SYSTEMS:
+            medians = system_medians[system]
+            times = {method: medians[(query, method)] for method in METHODS}
+            row.extend(
+                (
+                    format_runtime(times["baseline"]),
+                    format_runtime(times["dewey"]),
+                    format_runtime(times["prepost"]),
+                    format_speedup(times["baseline"], times["dewey"]),
+                    format_speedup(times["baseline"], times["prepost"]),
+                )
+            )
+        rows.append(row)
+    return rows
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--age", required=True, type=Path)
@@ -359,22 +558,48 @@ def main():
     parser.add_argument("--neo4j", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-    medians = {
-        "Apache AGE": load_medians(args.age),
-        "Kuzu": load_medians(args.kuzu),
-        "Neo4j": load_medians(args.neo4j),
+    inputs = {
+        "Apache AGE": args.age,
+        "Kuzu": args.kuzu,
+        "Neo4j": args.neo4j,
     }
+    input_kinds = set()
+    for path in inputs.values():
+        with path.open(newline="", encoding="utf-8-sig") as handle:
+            fieldnames = csv.DictReader(handle).fieldnames or []
+        input_kinds.add("tree" if "scenario" in fieldnames else "ldbc")
+    if len(input_kinds) != 1:
+        raise ValueError("All inputs must use the same CSV format")
+    input_kind = input_kinds.pop()
+    loader = load_medians if input_kind == "tree" else load_ldbc_medians
+    medians = {system: loader(path) for system, path in inputs.items()}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="combined-runtime-tables-") as temp_name:
         temp = Path(temp_name)
         page_pdfs = []
-        for number, query in enumerate(QUERIES, start=1):
-            rows = make_rows(medians, query)
-            if len(rows) != 40:
-                raise ValueError(f"Expected 40 rows for {query}, found {len(rows)}")
+        if input_kind == "tree":
+            pages = [
+                (title, make_rows(medians, query, scenarios), ("Graph", "Parameters"), True)
+                for title, query, scenarios in report_pages(medians)
+            ]
+        else:
+            pages = [
+                ("LDBC SNB SF1", make_ldbc_rows(medians), ("Query", "Name"), False)
+            ]
+        for number, (title, rows, leading_headings, graph_notes) in enumerate(
+            pages, start=1
+        ):
+            expected_rows = 40 if input_kind == "tree" else 3
+            if len(rows) != expected_rows:
+                raise ValueError(
+                    f"Expected {expected_rows} rows for {title}, found {len(rows)}"
+                )
             svg = temp / f"page-{number}.svg"
             pdf = temp / f"page-{number}.pdf"
-            svg.write_text(svg_page(QUERY_LABELS[query], rows), encoding="utf-8")
+            svg.write_text(
+                svg_page(title, rows, leading_headings, graph_notes),
+                encoding="utf-8",
+            )
             subprocess.run(["rsvg-convert", "-f", "pdf", "-o", pdf, svg], check=True)
             page_pdfs.append(pdf)
         combined = temp / "runtime_tables.pdf"

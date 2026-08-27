@@ -24,6 +24,7 @@ def get_config():
         METADATA_SUBPATH: Path to graph metadata directory
         EXPERIMENT_HEAT: Number of warmup iterations (default: 0)
         EXPERIMENT_N: Number of timed iterations (default: 5)
+        SCENARIO_FILTER: Comma-separated scenario names/globs (default: all)
 
     For Docker container execution (default):
         NEO4J_URI=bolt://neo4j_treebench_db:7687
@@ -54,6 +55,7 @@ def get_config():
             "save_plans": os.getenv("SAVE_PLANS", "1") == "1",
             "save_results": os.getenv("SAVE_RESULTS", "1") == "1",
             "save_queries": os.getenv("SAVE_QUERIES", "1") == "1",
+            "scenario_filter": os.getenv("SCENARIO_FILTER", ""),
         }
     }
 
@@ -116,6 +118,7 @@ def run_experiment(config=None):
         save_plans=exp_config["save_plans"],
         save_results=exp_config["save_results"],
         save_queries=exp_config["save_queries"],
+        scenario_filter=exp_config["scenario_filter"],
     )
 
     for executor in (plain_ne, dewey_ne, prepost_ne):
