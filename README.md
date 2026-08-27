@@ -96,6 +96,18 @@ docker compose up -d
 
 The AGE container automatically runs a resumable init chain (`entrypoint-resumable-init.sh` + `run-all-init.sh`) that creates graphs, loads prepared data, and builds tree indexes. It is ready when the healthcheck passes (it checks for `.init_complete` and `pg_isready`).
 
+#### AGE maintenance setup
+
+Start the container from the `docker/age_maintenance/` directory:
+
+```bash
+cd docker/age_maintenance
+docker compose up -d --build
+```
+
+Maintenance uses a separate PostgreSQL volume so that its writes do not affect
+the regular AGE benchmark database.
+
 ---
 
 ## Running Experiments
@@ -193,6 +205,76 @@ docker exec -it -u "$(id -u):$(id -g)" -w /experiments age_treebench bash run_ex
 Results are written to a timestamped folder `results/age/<YYYYMMDD_HHMMSS>`.
 Reference results for the paper setup are stored under `results/age/paper_results/`.
 
+#### AGE maintenance experiments
+
+Maintenance experiments are started via `run_experiments.sh` in the
+`age_treebench_maintenance` container.
+
+Options:
+
+| Option | Description |
+|---|---|
+| `-q`, `--queries LIST` | Comma-separated query IDs, filenames, or globs. Examples: `01,03` or `01_insert_last_child_under_last_root.sql`. |
+| `-d`, `--datasets LIST` | Comma-separated base graph names, graph names, or globs. |
+| `-r`, `--runs N` | Number of measured runs per operation (default: `1`). |
+| `-w`, `--warmup` | Run one rolled-back warmup execution before measurements. |
+| `-t`, `--timeout-ms N` | Statement timeout in milliseconds (default: `3600000`). |
+| `-n`, `--note TEXT` | Append a note to the maintenance run notes. |
+| `--parameters-file FILE` | Root-parameter CSV (default: `experiments/maintenance_parameters.csv`). |
+| `--save-queries` | Save rendered SQL files. |
+| `--save-plans` | Save rolled-back `EXPLAIN ANALYZE` plans. |
+| `--save-results` | Save rolled-back result snapshots and diffs. |
+| `--timing-off` | Use `TIMING OFF` for saved plans. |
+| `--compact-before` | Run `VACUUM FULL ANALYZE` once before measurements. |
+| `--no-vacuum-between-runs` | Disable cleanup after rolled-back runs. |
+| `-h`, `--help` | Show help. |
+
+For `--queries`, use the numeric IDs from the scenario table below, complete
+query filenames, or shell-style globs. For example, `--queries 01,02` runs the
+two child insertions. For
+`--datasets`, use a base name such as `snb_sf1_comment`, a complete graph name
+such as `snb_sf1_comment_dewey`, or a glob such as `snb*`. The fixed parent
+parameters are loaded from `experiments/maintenance_parameters.csv`; override
+the file with `--parameters-file`.
+
+The four scenarios are:
+
+| Query ID | Scenario |
+|---|---|
+| `01` | Insert the last child under the last root. |
+| `02` | Insert the first child under the first root. |
+| `03` | Insert the last root. |
+| `04` | Insert the first root. |
+
+Reproducing The Paper Setup:
+
+```bash
+docker exec -it -w /experiments age_treebench_maintenance bash run_experiments.sh \
+  --runs 5 \
+  --warmup \
+  --save-plans \
+  --save-results \
+  --save-queries
+```
+
+On Linux, prefer using a mapped host user:
+
+```bash
+docker exec -it -u "$(id -u):$(id -g)" -w /experiments age_treebench_maintenance bash run_experiments.sh \
+  --runs 5 \
+  --warmup \
+  --save-plans \
+  --save-results \
+  --save-queries
+```
+
+With `--save-results`, the runner stores the post-maintenance snapshots and
+unified before/after diffs in the run's `results/` and `diffs/` directories.
+Snapshot and diff generation are outside `runtime_ms` and can produce large
+artifacts for SNB.
+
+Results are written to `results/age_maintenance/<YYYYMMDD_HHMMSS>/runtimes.csv`.
+
 #### Experiments on Official LDBC SNB Queries
 
 Experiments on the official LDBC SNB interactive queries are run via `experiments/age_ldbc/run_experiments.sh` in the `age_ldbc_treebench` container, using the baseline, Dewey, and pre/post query sets under `queries/age_ldbc/`.
@@ -258,6 +340,10 @@ queries/
 │   ├── dewey/          # 3 official SNB queries with Dewey annotations
 │   ├── original/       # 3 original Cypher queries
 │   └── prepost/        # 3 official SNB queries with PrePost annotations
+├── age_maintenance/
+│   ├── baseline/       # 4 rolled-back insertion operations
+│   ├── dewey/          # 4 insertion operations with Dewey annotations
+│   └── prepost/        # 4 insertion operations with PrePost annotations
 ├── kuzu/
 │   ├── baseline/       # 12 queries
 │   ├── dewey/          # 12 queries
@@ -305,6 +391,15 @@ Official LDBC query files use names such as `interactive-short-2.sql`,
 `interactive-short-6.sql`, and `interactive-complex-12.sql` rather than the
 tree-operation numbers.
 
+Maintenance query files use the scenario IDs `01` to `04`:
+
+| ID | Maintenance operation |
+|---|---|
+| `01` | Insert the last child under the last root |
+| `02` | Insert the first child under the first root |
+| `03` | Insert the last root |
+| `04` | Insert the first root |
+
 ### Comparing Queries across Systems and Schemes
 
 To compare queries that implement the same logical operation, open the three scheme variants side-by-side. For example, for `all_descendants` on Neo4j:
@@ -316,7 +411,7 @@ queries/neo4j/prepost/01_all_descendants.sql
 ```
 
 The numeric prefix is stable across the regular tree-query implementations.
-LDBC queries are compared within the LDBC workload.
+LDBC and maintenance queries are compared within their respective workloads.
 
 All queries are parameterised (e.g. `$NODE_TYPE`, `$rootID`); the experiment runners substitute concrete values at runtime.
 
@@ -397,6 +492,23 @@ Typical AGE output files/folders inside these directories:
 | `errors/` | Error/timeout logs generated during execution |
 
 This CSV is the AGE input used by the cross-system comparison scripts below.
+
+#### AGE maintenance reports
+
+Maintenance runs are stored under `results/age_maintenance/<YYYYMMDD_HHMMSS>/`.
+
+Create the maintenance runtime table with:
+
+```bash
+python scripts/create_maintenance_runtime_tables.py \
+  results/age_maintenance/<YYYYMMDD_HHMMSS>/runtimes.csv \
+  results/age_maintenance/<YYYYMMDD_HHMMSS>/runtime_tables.pdf
+```
+
+The PDF has one page per maintenance scenario. Each page lists the median
+Baseline, Dewey, and Prepost runtimes for the selected graphs, together with
+the maintenance-cost differences `Dewey - Baseline` and `Prepost - Baseline`.
+The cost columns use a logarithmic color scale.
 
 #### Experiments on Official LDBC SNB Queries
 

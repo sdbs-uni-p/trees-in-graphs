@@ -12,6 +12,7 @@ SCRIPTS=(
   "00_init-age.sh"
   "10_create_graphs.sh"
   "20_load_data.sh"
+  "25_sync_label_sequences.sh"
   "30_add_tree_indexes.sh"
   "99_init_complete.sh"
 )
