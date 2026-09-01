@@ -43,7 +43,7 @@ def split_graph(graph: str) -> tuple[str, str]:
         suffix = f"_{method}"
         if graph.endswith(suffix):
             return graph[: -len(suffix)], method
-    raise ValueError(f"Unknown representation: {graph}")
+    raise ValueError(f"Unbekannte Repräsentation: {graph}")
 
 
 def load_medians(path: Path) -> dict[tuple[str, str, str], float]:
@@ -53,7 +53,7 @@ def load_medians(path: Path) -> dict[tuple[str, str, str], float]:
         required = {"graph", "query", "run", "runtime_ms"}
         missing = required - set(reader.fieldnames or ())
         if missing:
-            raise ValueError(f"Missing columns: {sorted(missing)}")
+            raise ValueError(f"Fehlende Spalten: {sorted(missing)}")
         for row in reader:
             graph, method = split_graph(row["graph"].strip())
             runtime = row["runtime_ms"].strip()
@@ -64,7 +64,7 @@ def load_medians(path: Path) -> dict[tuple[str, str, str], float]:
     medians = {}
     for key, runs in values.items():
         if len(runs) != 5:
-            raise ValueError(f"Expected five runs for {key}, found {len(runs)}")
+            raise ValueError(f"Erwartet wurden fünf Läufe für {key}, gefunden: {len(runs)}")
         medians[key] = statistics.median(runs)
     return medians
 
@@ -208,7 +208,7 @@ def main() -> None:
     medians = load_medians(args.input)
     missing = set(QUERY_ORDER) - {query for _, query, _ in medians}
     if missing:
-        raise ValueError(f"Missing queries: {sorted(missing)}")
+        raise ValueError(f"Queries fehlen: {sorted(missing)}")
     page_rows = {query: make_rows(medians, query) for query in QUERY_ORDER}
     maximum_cost = max(abs(cost) for rows in page_rows.values() for _, costs in rows for cost in costs)
 

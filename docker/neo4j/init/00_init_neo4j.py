@@ -427,9 +427,16 @@ def _build_node_query(node_label, props):
     )
 
 
-def create_neo4j_snb_database(driver, tree_label, annotation):
-    """Create a full SNB graph with one AGE-compatible annotated tree."""
-    graph_name = f"snb_sf1_{tree_label.lower()}_{graph_variant(annotation)}"
+def create_neo4j_snb_database(
+    driver, tree_label, annotation, *, graph_name=None, annotated_labels=None
+):
+    """Create a full SNB graph with selected tree labels annotated."""
+    if annotated_labels is None:
+        annotated_labels = {tree_label}
+    else:
+        annotated_labels = set(annotated_labels)
+    if graph_name is None:
+        graph_name = f"snb_sf1_{tree_label.lower()}_{graph_variant(annotation)}"
     db_name = to_neo4j_db_name(graph_name)
     nodes_dir = os.path.join(DATA_DIR, "snb", "sf1", "nodes")
     edges_dir = os.path.join(DATA_DIR, "snb", "sf1", "edges")
@@ -478,7 +485,7 @@ def create_neo4j_snb_database(driver, tree_label, annotation):
 
         # Load tree-annotated node types
         for label in ["Comment", "Place", "TagClass"]:
-            label_annotation = annotation if label == tree_label else "plain"
+            label_annotation = annotation if label in annotated_labels else "plain"
             node_csv_src = os.path.join(
                 nodes_dir, S_ALL_TREE_NODE_FILES[(label, label_annotation)]
             )

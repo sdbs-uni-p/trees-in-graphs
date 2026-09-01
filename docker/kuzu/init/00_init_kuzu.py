@@ -466,9 +466,21 @@ def create_kuzu_database(dataset, tmp_dir):
     return True
 
 
-def create_snb_kuzu_database(tree_label, annotation, tmp_dir):
-    """Create a full SNB graph with one AGE-compatible annotated tree."""
-    graph_name = f"snb_sf1_{tree_label.lower()}_{graph_variant(annotation)}"
+def create_snb_kuzu_database(
+    tree_label, annotation, tmp_dir, *, graph_name=None, annotated_labels=None
+):
+    """Create a full SNB graph with selected tree labels annotated.
+
+    The regular tree benchmark passes one ``tree_label``.  The LDBC setup
+    passes all three labels and an explicit graph name so that its queries see
+    the same complete annotated graph as ``age_ldbc``.
+    """
+    if annotated_labels is None:
+        annotated_labels = {tree_label}
+    else:
+        annotated_labels = set(annotated_labels)
+    if graph_name is None:
+        graph_name = f"snb_sf1_{tree_label.lower()}_{graph_variant(annotation)}"
     db_path = os.path.join(KUZU_DIR, graph_name)
     nodes_dir = os.path.join(DATA_DIR, "snb", "sf1", "nodes")
     edges_dir = os.path.join(DATA_DIR, "snb", "sf1", "edges")
@@ -486,15 +498,16 @@ def create_snb_kuzu_database(tree_label, annotation, tmp_dir):
     id_mappings = {}
     pk_col = S_ALL_TREE_PKS[annotation]
     if pk_col != "id":
-        node_file = S_ALL_TREE_NODE_FILES[(tree_label, annotation)]
-        node_csv_path = os.path.join(nodes_dir, node_file)
-        if os.path.isfile(node_csv_path):
-            mapping = {}
-            with open(node_csv_path, "r", newline="") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    mapping[row["id"]] = row[pk_col]
-            id_mappings[tree_label] = mapping
+        for annotated_label in annotated_labels:
+            node_file = S_ALL_TREE_NODE_FILES[(annotated_label, annotation)]
+            node_csv_path = os.path.join(nodes_dir, node_file)
+            if os.path.isfile(node_csv_path):
+                mapping = {}
+                with open(node_csv_path, "r", newline="") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        mapping[row["id"]] = row[pk_col]
+                id_mappings[annotated_label] = mapping
 
     db = kuzu.Database(db_path)
     conn = kuzu.Connection(db)
@@ -529,7 +542,7 @@ def create_snb_kuzu_database(tree_label, annotation, tmp_dir):
 
     # Load tree-annotated node types
     for label in ["Comment", "Place", "TagClass"]:
-        label_annotation = annotation if label == tree_label else "plain"
+        label_annotation = annotation if label in annotated_labels else "plain"
         node_file = S_ALL_TREE_NODE_FILES[(label, label_annotation)]
         node_csv_path = os.path.join(nodes_dir, node_file)
         if not os.path.isfile(node_csv_path):

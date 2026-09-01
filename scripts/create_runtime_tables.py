@@ -67,7 +67,7 @@ def split_graph(graph):
         suffix = "_" + method
         if graph.endswith(suffix):
             return graph[: -len(suffix)], method
-    raise ValueError(f"Unknown representation: {graph}")
+    raise ValueError(f"Unbekannte Repräsentation: {graph}")
 
 
 def graph_label(graph):
@@ -87,7 +87,7 @@ def graph_label(graph):
     }
     if graph in snb:
         return snb[graph]
-    raise ValueError(f"Unknown graph: {graph}")
+    raise ValueError(f"Unbekannter Graph: {graph}")
 
 
 def graph_sort_key(graph):
@@ -97,7 +97,7 @@ def graph_sort_key(graph):
     for prefix, order in (("F", 0), ("NT", 1), ("DT", 2), ("WT", 3)):
         if label.startswith(prefix):
             return order, int(label[len(prefix) :])
-    raise ValueError(f"Unknown graph abbreviation: {label}")
+    raise ValueError(f"Unbekanntes Graphkürzel: {label}")
 
 
 def runtime_text(value):
@@ -122,10 +122,10 @@ def load_groups(path):
     groups = {}
     for key, runs in values.items():
         if len(runs) != 5:
-            raise ValueError(f"Expected five runs for {key}, found {len(runs)}")
+            raise ValueError(f"Erwartet wurden fünf Läufe für {key}, gefunden: {len(runs)}")
         if any(value is None for value in runs):
             if not all(value is None for value in runs):
-                raise ValueError(f"Partial timeout in {key}; handling must be clarified")
+                raise ValueError(f"Teilweiser Timeout in {key}; bitte Behandlung klären")
             groups[key] = None
         else:
             groups[key] = statistics.median(runs)
@@ -150,7 +150,7 @@ def make_rows(groups, query, scenarios=None):
                 speedups.append("–")
             elif times[method] is None:
                 raise ValueError(
-                    f"Unexpected case: {method} timed out with an available baseline: "
+                    f"Unerwarteter Fall: {method}-Timeout bei vorhandener Baseline: "
                     f"{graph}, {query}, {scenario}"
                 )
             elif times["baseline"] is None:
@@ -394,9 +394,9 @@ def svg_page(title, rows, columns=None, column_widths=None):
         ))
     notes.extend([
         (
-            "Runtimes: median of five runs, in milliseconds (ms)."
+            "Runtimes: median of measured runs, in milliseconds (ms)."
             if is_ldbc
-            else "Runtimes: median of five runs."
+            else "Runtimes: median of measured runs."
         ) + (' ">6 h" denotes a timeout.' if has_timeout else ""),
         "Speedup Dewey = Baseline / Dewey; "
         "Speedup Prepost = Baseline / Prepost."
@@ -450,17 +450,17 @@ def load_ldbc_rows(path):
         for row in csv.DictReader(handle):
             graph, method = split_graph(row["graph"].strip())
             if graph != "snb_sf1":
-                raise ValueError(f"Unexpected LDBC graph: {graph}")
+                raise ValueError(f"Unerwarteter LDBC-Graph: {graph}")
             runtime = row["runtime_ms"].strip()
             values[(row["query"].strip(), method)].append(None if not runtime else float(runtime))
 
     medians = {}
     for key, runs in values.items():
-        if len(runs) != 5:
-                raise ValueError(f"Expected five runs for {key}, found {len(runs)}")
+        if not runs:
+            raise ValueError(f"Keine Läufe für {key} gefunden")
         if any(value is None for value in runs):
             if not all(value is None for value in runs):
-                raise ValueError(f"Partial timeout in {key}; handling must be clarified")
+                raise ValueError(f"Teilweiser Timeout in {key}; bitte Behandlung klären")
             medians[key] = None
         else:
             medians[key] = statistics.median(runs)
@@ -474,7 +474,7 @@ def load_ldbc_rows(path):
             if times["baseline"] is None and times[method] is None:
                 speedups.append("–")
             elif times[method] is None:
-                raise ValueError(f"Unexpected {method} timeout with an available baseline: {query}")
+                raise ValueError(f"Unerwarteter {method}-Timeout bei vorhandener Baseline: {query}")
             elif times["baseline"] is None:
                 speedups.append(speedup_text(TIMEOUT_MS / times[method], True))
             else:

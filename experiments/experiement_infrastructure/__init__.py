@@ -4,6 +4,7 @@ from .ExecutorDefinitions import Executor, ApacheExecutor, KuzuExecutor, Neo4jEx
 from .AssessmentLogic import Assessor, assess_db, load_queries_from_sql
 from .CreateParametrizedQueries import Parametrizer, ReducedParametrizer, KuzuParametrizer, ReducedKuzuParametrizer
 from .FixedScenarioRunner import load_parameter_scenarios, run_fixed_scenarios
+from .LdbcRunner import run_ldbc
 
 __all__ = [
     "Executor",
@@ -19,4 +20,5 @@ __all__ = [
     "ReducedKuzuParametrizer",
     "load_parameter_scenarios",
     "run_fixed_scenarios",
+    "run_ldbc",
 ]

@@ -94,7 +94,7 @@ cd docker/age
 docker compose up -d
 ```
 
-The AGE container automatically runs a resumable init chain (`entrypoint-resumable-init.sh` + `run-all-init.sh`) that creates graphs, loads prepared data, and builds tree indexes. It is ready when the healthcheck passes (it checks for `.init_complete` and `pg_isready`).
+The AGE container automatically runs a resumable init chain (`entrypoint-resumable-init.sh` + `run-all-init.sh`) that creates graphs, loads prepared data, and builds tree indexes. It is ready when the healthcheck passes (it checks for `.init_complete` and `pg_isready`). The index step creates the same GIN index on the AGE `properties` column for baseline, Dewey, and PrePost so that all variants resolve the imported `__id__` start-node property through the same index. AGE experiment sessions disable parallel query workers for all three variants; no planner hints are injected.
 
 #### AGE maintenance setup
 
@@ -111,6 +111,39 @@ the regular AGE benchmark database.
 ---
 
 ## Running Experiments
+
+### LDBC experiments with Kuzu and Neo4j
+
+The three LDBC SNB SF1 queries also have isolated, engine-native setups. Each
+setup creates complete `snb_sf1_baseline`, `snb_sf1_dewey`, and
+`snb_sf1_prepost` databases; unlike the unsuffixed tree setups, all three tree
+labels (`Comment`, `Place`, and `TagClass`) are annotated together.
+
+```bash
+docker compose -f docker/kuzu_ldbc/docker-compose.yml up -d --build
+docker exec -it -u "$(id -u):$(id -g)" -w /project kuzu_ldbc_treebench \
+  python -m experiments.kuzu_ldbc.kuzu_ldbc_experiment_def
+
+docker compose -f docker/neo4j_ldbc/docker-compose.yml up -d --build
+docker exec -it -u "$(id -u):$(id -g)" -w /project neo4j_ldbc_treebench_init \
+  python -m experiments.neo4j_ldbc.neo4j_ldbc_experiment_def
+```
+
+The runners default to five measured executions and write timestamped outputs
+to `results/kuzu_ldbc/` and `results/neo4j_ldbc/`. Every run contains
+`runtimes.csv`, `runtime_tables.pdf`, and (by default) `queries/`, `plans/`,
+`results/`, and `errors/`. Configure the run with `EXPERIMENT_N`,
+`EXPERIMENT_HEAT`, `QUERY_FILTER`, `SAVE_QUERIES`, `SAVE_PLANS`, and
+`SAVE_RESULTS` environment variables. `QUERY_FILTER` accepts comma-separated
+names or globs such as `interactive-short-*`.
+
+For annotated LDBC queries, fixed logical parameters are resolved to their
+indexed Dewey or PrePost keys before timing, following the same approach as
+the unsuffixed Kuzu/Neo4j fixed-scenario runner. This setup work is not part of
+`runtime_ms`. The measured Short 2 query still selects its ten recent messages
+itself; Comment roots are then found structurally before the remaining
+baseline path is evaluated. Runs intentionally use no explicit warmup by
+default; reports use the median of the measured executions.
 
 On Linux, `docker exec` runs as `root` by default. This can create root-owned files/directories on bind mounts (for example under `results/`), which then causes permission issues on the host.
 
@@ -278,6 +311,10 @@ python scripts/create_combined_runtime_tables.py \
 Maintenance experiments are started via `run_experiments.sh` in the
 `age_treebench_maintenance` container.
 
+The isolated setup creates the baseline, Dewey, and PrePost graphs in its own
+PostgreSQL volume. All variants use the same GIN index for `__id__` start-node
+lookup and run with parallel query workers disabled.
+
 Options:
 
 | Option | Description |
@@ -403,15 +440,7 @@ queries/
 │   ├── baseline/       # 4 queries
 │   ├── dewey/          # 4 queries
 │   ├── prepost/        # 4 queries
-├── age_ldbc/
-│   ├── baseline/       # 3 official SNB queries adapted for AGE
-│   ├── dewey/          # 3 official SNB queries with Dewey annotations
-│   ├── original/       # 3 original Cypher queries
-│   └── prepost/        # 3 official SNB queries with PrePost annotations
-├── age_maintenance/
-│   ├── baseline/       # 4 rolled-back insertion operations
-│   ├── dewey/          # 4 insertion operations with Dewey annotations
-│   └── prepost/        # 4 insertion operations with PrePost annotations
+│   └── ldbc/           # 3 official SNB queries, original (cypher) and adapted for AGE (sql)
 ├── kuzu/
 │   ├── baseline/       # 12 queries
 │   ├── dewey/          # 12 queries
@@ -422,9 +451,7 @@ queries/
     └── prepost/        # 12 queries
 ```
 
-Kuzu and Neo4j each implement 10 regular tree operations per encoding. AGE
-implements only 4 regular tree operations per encoding: `01`, `02`, `05`, and
-`11`. LDBC and maintenance are separate workloads with their own query names.
+Neo4j and Kuzu each implement 10 distinct operations per encoding (30 files each); AGE implements a subset of 4 operations per encoding (12 files total).
 
 ### Encoding Schemes
 
@@ -438,9 +465,7 @@ Each database system implements the same logical operations under three differen
 
 ### Query Naming
 
-Tree query files follow the pattern `{NN}_{operation}.sql`, where the numeric
-prefix groups equivalent tree operations across the baseline, Dewey, and
-PrePost implementations:
+Files follow the pattern `{NN}_{operation}.sql`, where the numeric prefix groups equivalent operations across schemes and systems:
 
 | ID | Operation |
 |---|---|
@@ -455,19 +480,6 @@ PrePost implementations:
 | `12` | `check_same_subtree` (negative case) |
 | `14` | `check_if_ancestor` (negative case) |
 
-Official LDBC query files use names such as `interactive-short-2.sql`,
-`interactive-short-6.sql`, and `interactive-complex-12.sql` rather than the
-tree-operation numbers.
-
-Maintenance query files use the scenario IDs `01` to `04`:
-
-| ID | Maintenance operation |
-|---|---|
-| `01` | Insert the last child under the last root |
-| `02` | Insert the first child under the first root |
-| `03` | Insert the last root |
-| `04` | Insert the first root |
-
 ### Comparing Queries across Systems and Schemes
 
 To compare queries that implement the same logical operation, open the three scheme variants side-by-side. For example, for `all_descendants` on Neo4j:
@@ -478,8 +490,7 @@ queries/neo4j/dewey/01_all_descendants.sql
 queries/neo4j/prepost/01_all_descendants.sql
 ```
 
-The numeric prefix is stable across the regular tree-query implementations.
-LDBC and maintenance queries are compared within their respective workloads.
+The numeric prefix is stable across systems, so the same ID in `queries/kuzu/baseline/` and `queries/age/baseline/` implements the same logical operation — making cross-system, same-scheme comparisons straightforward as well.
 
 All queries are parameterised (e.g. `$NODE_TYPE`, `$rootID`); the experiment runners substitute concrete values at runtime.
 
@@ -581,25 +592,6 @@ The cost columns use a logarithmic color scale.
 #### Experiments on Official LDBC SNB Queries
 
 The three committed interactive LDBC SNB queries are available as original Cypher under `queries/age_ldbc/original/` and as Apache AGE SQL under `queries/age_ldbc/{baseline,dewey,prepost}/`. New benchmark outputs are stored under `results/age_ldbc/`.
-
-#### LDBC reports
-
-Each native Kuzu or Neo4j LDBC run contains `runtimes.csv`, `metadata.json`,
-`runtime_tables.pdf`, and, unless disabled, `queries/`, `plans/`, `results/`,
-and `errors/`. AGE LDBC runs use the same `runtimes.csv` format under
-`results/age_ldbc/`.
-
-Regenerate an LDBC runtime table from a completed run with:
-
-```bash
-python scripts/create_runtime_tables.py \
-  results/kuzu_ldbc/<YYYYMMDD_HHMMSS>/runtimes.csv \
-  results/kuzu_ldbc/<YYYYMMDD_HHMMSS>/runtime_tables.pdf
-```
-
-Use the corresponding `results/neo4j_ldbc/` or `results/age_ldbc/` path for
-the other systems. The report compares Baseline, Dewey, and Prepost median
-runtimes for the three interactive queries and renders Dewey/Prepost speedups.
 
 ### Cross-system Comparisons
 
