@@ -15,7 +15,7 @@ services:
     command:
       - postgres
       - -c
-      - shared_preload_libraries=age,pg_stat_statements,auto_explain,pg_hint_plan
+      - shared_preload_libraries=age,pg_stat_statements,auto_explain
     volumes:
       - age_treebench_data:/var/lib/postgresql/data
       - ../../data:/data:rw

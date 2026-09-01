@@ -61,12 +61,23 @@ The entry flow is:
 ## 30_add_tree_indexes.sh
 
 - SQL for index creation: `sql_scripts/30_add_tree_indexes.sql`.
-- By default, processes only `*_dewey` and `*_prepost`.
+- By default, processes `*_baseline`, `*_dewey`, and `*_prepost`.
 - For tree-specific graphs (e.g. `snb_sf1_comment_dewey`), `tree_name` is derived from the graph name.
 - Then only the **matching tree row** from `trees.csv` is selected.
 - For that tree, the respective index is created:
-  - `dewey`: columns/constraint + populate + `ANALYZE`
-  - `prepost`: columns/constraints + populate + `ANALYZE`
+  - `dewey`: columns/constraint + populate + Dewey indexes
+  - `prepost`: columns/constraints + populate + PrePost indexes
+- The common GIN index on `properties` is created only after all derived
+  columns and variant-specific indexes have been populated, followed by
+  `ANALYZE`. This keeps bulk annotation updates out of the GIN maintenance
+  path and gives every freshly initialized variant a compact lookup index.
+- The GIN index supports lookup of the imported `__id__` start-node property
+  consistently across baseline, Dewey, and PrePost graphs.
+
+AGE experiment sessions disable parallel query workers for all three variants;
+no planner hints are injected. The ancestor-descendant query also runs with
+JIT disabled so that its measured execution does not include JIT compilation
+effects.
 
 ## Important log prefixes in container output
 

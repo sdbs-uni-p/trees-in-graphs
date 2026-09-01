@@ -189,11 +189,11 @@ def report_pages(system_medians):
 
     negative_query = "11_check_if_ancestor"
     negative_names = {"q09", "q10"}
-    has_any_negative = any(
+    has_common_negative = any(
         query == negative_query and scenario in negative_names
-        for query, scenario in all_scenarios
+        for query, scenario in common_scenarios
     )
-    if has_any_negative:
+    if has_common_negative:
         if not supports(negative_query, ANCESTOR_NEGATIVE_SCENARIOS):
             raise ValueError(
                 "q09/q10 must be present in all AGE, Kuzu, and Neo4j inputs"
@@ -213,7 +213,11 @@ def report_pages(system_medians):
 def numeric_speedup(text):
     if text == "–":
         return None
-    return float(text.lstrip(">").rstrip("x").replace(",", ""))
+    number = text.lstrip(">").rstrip("x").replace(",", "")
+    multiplier = 1000 if number.endswith("K") else 1
+    if multiplier != 1:
+        number = number[:-1]
+    return float(number) * multiplier
 
 
 def svg_label(value):
@@ -226,8 +230,11 @@ def svg_label(value):
     if value not in indexed:
         return html.escape(value)
     symbol, index = indexed[value]
+    symbol_style = ' font-style="italic"' if symbol == "Q" else ""
+    index_style = ' font-style="italic"' if symbol == "Q" else ""
     return (
-        f"{symbol}<tspan baseline-shift=\"sub\" font-size=\"6\">"
+        f'<tspan{symbol_style}>{symbol}</tspan>'
+        f'<tspan baseline-shift="sub" font-size="6"{index_style}>'
         f"{index}</tspan>"
     )
 
@@ -249,18 +256,23 @@ def svg_page(
     subheadings=None,
     notes_override=None,
     row_height=15,
+    header_height=21,
+    subheader_height=19,
+    body_font_size=8.2,
     table_only=False,
     fit_content=False,
 ):
-    header_height, subheader_height = 21, 19
     if leading_widths is None:
         leading_widths = [50, 126]
     if metric_widths is None:
         metric_widths = [62, 62, 62, 68, 68]
-    if len(metric_widths) == 5:
+    metrics_per_system = len(subheadings) if subheadings is not None else 5
+    if len(metric_widths) == metrics_per_system:
         metric_widths = list(metric_widths) * 3
-    elif len(metric_widths) != 15:
-        raise ValueError("metric_widths must contain 5 or 15 widths")
+    elif len(metric_widths) != metrics_per_system * 3:
+        raise ValueError(
+            "metric_widths must contain one system group or all three groups"
+        )
     widths = list(leading_widths) + list(metric_widths)
     table_width = sum(widths)
     total_header = header_height + subheader_height
@@ -284,7 +296,7 @@ def svg_page(
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" {physical_size} viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="white"/>',
-        '<g font-family="Arial, Helvetica, sans-serif" fill="#111">',
+        '<g font-family="Liberation Serif, DejaVu Serif, serif" fill="#111">',
     ]
     if not table_only:
         parts.append(
@@ -311,8 +323,9 @@ def svg_page(
         )
     leading_columns = len(leading_headings)
     for system_index, system in enumerate(SYSTEMS):
-        start_column = leading_columns + system_index * 5
-        group_left, group_right = xs[start_column], xs[start_column + 5]
+        start_column = leading_columns + system_index * metrics_per_system
+        group_left = xs[start_column]
+        group_right = xs[start_column + metrics_per_system]
         parts.append(
             f'<text x="{(group_left + group_right) / 2}" y="{top + header_height / 2}" '
             f'text-anchor="middle" dominant-baseline="middle" font-size="9" '
@@ -329,10 +342,15 @@ def svg_page(
                 f'y="{top + header_height + subheader_height / 2}" text-anchor="middle" '
                 f'dominant-baseline="middle" font-size="7.7">{svg_label(heading)}</text>'
             )
+    speedup_offsets = {
+        offset
+        for offset, heading in enumerate(subheadings)
+        if heading in {"S_D", "S_P", "Speedup Dewey", "Speedup Prepost"}
+    }
     speedup_columns = {
-        leading_columns + system_index * 5 + offset
+        leading_columns + system_index * metrics_per_system + offset
         for system_index in range(len(SYSTEMS))
-        for offset in (3, 4)
+        for offset in speedup_offsets
     }
     previous_graph = None
     for row_index, row in enumerate(rows):
@@ -342,7 +360,7 @@ def svg_page(
             if column in speedup_columns:
                 ratio = numeric_speedup(value)
                 if ratio is not None:
-                    fill = speedup_color(ratio)
+                    fill = "#d6d6d6" if ratio < 1 else speedup_color(ratio)
                     red, green, blue = (int(fill[pos : pos + 2], 16) for pos in (1, 3, 5))
                     if 0.2126 * red + 0.7152 * green + 0.0722 * blue < 105:
                         foreground = "white"
@@ -355,27 +373,38 @@ def svg_page(
             center_y = y + row_height / 2
             weight = "bold" if value.startswith(">") else "normal"
             if numeric:
-                # Preserve the original table renderer's fixed-width numeric
-                # positioning instead of relying on proportional digits.
-                advance = 4.15
-                parts.append(
-                    f'<g font-family="Adwaita Sans, Arial, sans-serif" '
-                    f'font-weight="{weight}" fill="{foreground}">'
-                )
-                for character_index, character in enumerate(value):
-                    character_x = xs[column + 1] - 3 - (
-                        len(value) - character_index - 0.5
-                    ) * advance
-                    parts.append(
-                        f'<text x="{character_x}" y="{center_y}" text-anchor="middle" '
-                        f'dominant-baseline="middle" font-size="8.2">'
-                        f'{html.escape(character)}</text>'
+                # Tabular digits retain column alignment while rendering Kx
+                # and x as normal text, avoiding collisions between glyphs.
+                numeric_font_size = body_font_size
+                plain_number = value.lstrip(">").replace(",", "")
+                try:
+                    unusually_large_runtime = (
+                        not value.endswith("x")
+                        and float(plain_number) >= 1_000_000
                     )
-                parts.append("</g>")
+                except ValueError:
+                    unusually_large_runtime = False
+                if unusually_large_runtime:
+                    numeric_font_size = body_font_size - 2.0
+                elif value.endswith("x"):
+                    ratio = numeric_speedup(value)
+                    if ratio is not None and ratio >= 100_000:
+                        numeric_font_size = body_font_size - 1.1
+                parts.append(
+                    f'<text x="{xs[column + 1] - 3}" y="{center_y}" text-anchor="end" '
+                    f'dominant-baseline="middle" font-size="{numeric_font_size}" '
+                    f'font-weight="{weight}" fill="{foreground}" '
+                    f'font-variant-numeric="tabular-nums">{html.escape(value)}</text>'
+                )
             else:
+                text_font_size = (
+                    body_font_size - 0.8
+                    if value == "Deep parent–leaf"
+                    else body_font_size
+                )
                 parts.append(
                     f'<text x="{xs[column] + 3}" y="{center_y}" text-anchor="start" '
-                    f'dominant-baseline="middle" font-size="8.2" font-weight="{weight}" '
+                    f'dominant-baseline="middle" font-size="{text_font_size}" font-weight="{weight}" '
                     f'fill="{foreground}">{svg_label(value)}</text>'
                 )
         if previous_graph is not None and row[0] != previous_graph:
@@ -388,7 +417,10 @@ def svg_page(
     group_boundaries = {
         0,
         *range(1, leading_columns + 1),
-        *(leading_columns + system_index * 5 for system_index in range(len(SYSTEMS) + 1)),
+        *(
+            leading_columns + system_index * metrics_per_system
+            for system_index in range(len(SYSTEMS) + 1)
+        ),
     }
     for column, x in enumerate(xs):
         stroke_width = "1.2" if column in group_boundaries else "0.55"
@@ -458,10 +490,11 @@ def svg_page(
                 / (bar_width - slowdown_width - normal_width)
             )
             ratio = 10 * math.exp(transformed * math.log(10))
+        sample_fill = "#d6d6d6" if ratio < 1 else speedup_color(ratio)
         parts.append(
             f'<rect x="{bar_x + offset}" y="{legend_y - 9}" '
             f'width="{bar_width / samples + 0.5}" height="{bar_height}" '
-            f'fill="{speedup_color(ratio)}"/>'
+            f'fill="{sample_fill}"/>'
         )
     parts.append(
         f'<rect x="{bar_x}" y="{legend_y - 9}" width="{bar_width}" '
@@ -480,7 +513,7 @@ def svg_page(
         )
     parts.append(
         f'<text x="{bar_x + bar_width + 18}" y="{legend_y + 1}" font-size="7.7">'
-        'red = slowdown; yellow = 1x; green = speedup; darker green = larger speedup</text>'
+        'gray = slowdown; yellow = 1x; green = speedup; darker green = larger speedup</text>'
     )
     parts.extend(("</g>", "</svg>"))
     return "\n".join(parts)

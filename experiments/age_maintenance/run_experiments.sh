@@ -99,7 +99,7 @@ POSTGRES_DB="${POSTGRES_DB:-postgresDB}"
 POSTGRES_USER="${POSTGRES_USER:-postgresUser}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgresPW}"
 export PGPASSWORD="$POSTGRES_PASSWORD"
-export PGOPTIONS="${PGOPTIONS:-} -c statement_timeout=$TIMEOUT_MS"
+export PGOPTIONS="${PGOPTIONS:-} -c statement_timeout=$TIMEOUT_MS -c max_parallel_workers_per_gather=0"
 PSQL=(psql -X -v ON_ERROR_STOP=1 -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB")
 PSQL_AT=("${PSQL[@]}" -At)
 
@@ -108,10 +108,6 @@ if ! "${PSQL_AT[@]}" -c "SELECT 1 FROM ag_catalog.ag_graph LIMIT 1" >/dev/null 2
 	echo "Check: docker compose -f docker/age_maintenance/docker-compose.yml ps" >&2
 	echo "Logs:  docker compose -f docker/age_maintenance/docker-compose.yml logs -f age_treebench_maintenance" >&2
 	exit 0
-fi
-
-if ! "${PSQL[@]}" -c "CREATE EXTENSION IF NOT EXISTS pg_hint_plan;" >/dev/null 2>&1; then
-	echo "WARNING: pg_hint_plan extension could not be enabled; continuing." >&2
 fi
 
 mkdir -p "$OUTPUT_DIR" "$ERROR_DIR"

@@ -172,7 +172,18 @@ POSTGRES_USER="${POSTGRES_USER:-postgresUser}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgresPW}"
 
 export PGPASSWORD="$POSTGRES_PASSWORD"
-export PGOPTIONS="${PGOPTIONS:-} -c statement_timeout=${TIMEOUT_MS}"
+export PGOPTIONS="${PGOPTIONS:-} -c statement_timeout=${TIMEOUT_MS} -c max_parallel_workers_per_gather=0 -c jit=off"
+
+# Q11 compares the ancestor algorithms, not PostgreSQL's choice between an
+# indexed and a sequential start-node lookup. Keep that lookup identical for
+# baseline, Dewey, and PrePost. JIT is disabled globally above for every query.
+query_pgoptions() {
+	local options="$PGOPTIONS"
+	if [[ "${CURRENT_QUERY_FILE:-}" == 11_* ]]; then
+		options+=" -c enable_seqscan=off"
+	fi
+	printf '%s' "$options"
+}
 
 PSQL_BASE=(
 	psql
@@ -183,10 +194,6 @@ PSQL_BASE=(
 	-d "$POSTGRES_DB"
 	-At
 )
-
-if ! "${PSQL_BASE[@]}" -c "CREATE EXTENSION IF NOT EXISTS pg_hint_plan;" >/dev/null 2>&1; then
-	echo "WARNING: pg_hint_plan extension could not be created/enabled; continuing without planner hints." >&2
-fi
 
 print_not_initialized_hint() {
 	echo "AGE is not fully initialized yet. Skipping experiment run." >&2
@@ -427,12 +434,12 @@ resolve_query_parameter_scenarios() {
 
 load_query_parameters
 
-declare -A HINT_SAVED_KEYS
+declare -A SAVED_QUERY_KEYS
 
-persist_hinted_query() {
+persist_rendered_query() {
 	local graph="$1"
 	local full_path="$2"
-	local hinted_sql_file="$3"
+	local rendered_sql_file="$3"
 	local scenario="$4"
 	local query_name
 	local query_set
@@ -450,109 +457,12 @@ persist_hinted_query() {
 	graph_safe="$(echo "$graph" | tr '/\\: ' '____')"
 	query_safe="$(echo "${query_set}__${query_name}__${scenario}" | tr '/\\: ' '____')"
 	key="${graph}|${query_set}|${query_name}|${scenario}"
-	if [[ -n "${HINT_SAVED_KEYS[$key]+x}" ]]; then
+	if [[ -n "${SAVED_QUERY_KEYS[$key]+x}" ]]; then
 		return
 	fi
-	HINT_SAVED_KEYS["$key"]=1
+	SAVED_QUERY_KEYS["$key"]=1
 	dest="$QUERIES_DIR/${graph_safe}__${query_safe}"
-	cp "$hinted_sql_file" "$dest"
-}
-
-extract_nodetype_alias() {
-	local sql_file="$1"
-	sed -nE 's/.*:"nodetype"[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\1/p' "$sql_file" | head -n 1
-}
-
-ensure_root_alias() {
-	local in_file="$1"
-	local out_file="$2"
-
-	perl -0777 -pe '
-		s{
-			(WITH\s+root\s+AS\s*\(.*?\bFROM\s+:"graphname"\.:"nodetype")
-			(\s+)(WHERE|FOR|GROUP|ORDER|LIMIT|\))
-		}{$1 root_alias$2$3}isx
-	' "$in_file" > "$out_file"
-}
-
-ensure_ancestor_aliases() {
-	local in_file="$1"
-	local out_file="$2"
-
-	perl -0777 -pe '
-		s/FROM\s+:"graphname"\.:"nodetype"\s+WHERE/FROM :"graphname".:"nodetype" n1\n  WHERE/s;
-		s/FROM\s+:"graphname"\.:"nodetype"\s+WHERE/FROM :"graphname".:"nodetype" n2\n  WHERE/s;
-	' "$in_file" > "$out_file"
-}
-
-resolve_hint_alias() {
-	local sql_file="$1"
-	if grep -Eqi 'WITH[[:space:]]+root[[:space:]]+AS' "$sql_file"; then
-		echo "root_alias"
-	else
-		extract_nodetype_alias "$sql_file"
-	fi
-}
-
-inject_seqscan_hint() {
-	local in_file="$1"
-	local out_file="$2"
-	local alias
-
-	if grep -Eq '/\*\+[[:space:]]*SeqScan\(' "$in_file"; then
-		cp "$in_file" "$out_file"
-		return
-	fi
-
-	alias="$(resolve_hint_alias "$in_file" || true)"
-	if [[ -n "$alias" ]]; then
-		{
-			echo "/*+ SeqScan(${alias}) Parallel(${alias} 0 hard) */"
-			cat "$in_file"
-		} > "$out_file"
-	else
-		cp "$in_file" "$out_file"
-	fi
-}
-
-inject_ancestor_seqscan_hints() {
-	local in_file="$1"
-	local out_file="$2"
-	local query_set="$3"
-	local alias1 alias2
-
-	if grep -Eq '/\*\+[[:space:]]*SeqScan\(' "$in_file"; then
-		cp "$in_file" "$out_file"
-		return
-	fi
-
-	if [[ "$query_set" == "baseline" ]]; then
-		alias1="node1"
-		alias2="node2"
-	else
-		alias1="n1"
-		alias2="n2"
-	fi
-
-	{
-		echo "/*+ SeqScan(${alias1}) SeqScan(${alias2}) Parallel(${alias1} 0 hard) Parallel(${alias2} 0 hard) */"
-		cat "$in_file"
-	} > "$out_file"
-}
-
-wrap_baseline_transaction() {
-	local in_file="$1"
-	local out_file="$2"
-
-	{
-		echo "BEGIN;"
-		echo ""
-		echo "SET LOCAL max_parallel_workers_per_gather = 0;"
-		echo ""
-		cat "$in_file"
-		echo ""
-		echo "ROLLBACK;"
-	} > "$out_file"
+	cp "$rendered_sql_file" "$dest"
 }
 
 build_explain_script() {
@@ -578,18 +488,7 @@ build_explain_script() {
 prepare_execution_query() {
 	local source_file="$1"
 	local out_file="$2"
-	local query_set="$3"
-
-	if [[ "$query_set" == "baseline" ]] && grep -Eqi '^[[:space:]]*BEGIN[[:space:]]*;' "$source_file"; then
-		awk '
-			BEGIN { inside = 0 }
-			/^[[:space:]]*SET[[:space:]]+LOCAL[[:space:]]+max_parallel_workers_per_gather[[:space:]]*=[[:space:]]*0;[[:space:]]*$/ { inside = 1; next }
-			inside && /^[[:space:]]*ROLLBACK;[[:space:]]*$/ { exit }
-			inside { print }
-		' "$source_file" > "$out_file"
-	else
-		cp "$source_file" "$out_file"
-	fi
+	cp "$source_file" "$out_file"
 }
 
 render_query_template() {
@@ -603,15 +502,7 @@ render_query_template() {
 	local id1="$8"
 	local id2="$9"
 	local scenario="${10}"
-	local query_file_name
-	local raw_file
 
-	query_file_name="$(basename "$full_path")"
-	raw_file="$(mktemp)"
-	local aliased_file
-	aliased_file="$(mktemp)"
-	local hinted_file
-	hinted_file="$(mktemp)"
 	sed -e 's/\$NODE_TYPE/'"$nodetype"'/g' \
 			-e 's/\$REL_TYPE/'"$reltype"'/g' \
 			-e 's/\$rootID/'"$rootid"'/g' \
@@ -622,26 +513,9 @@ render_query_template() {
 			-e 's/:id1/'"$id1"'/g' \
 			-e 's/:id2/'"$id2"'/g' \
 			-e 's/\$GRAPHNAME/'"$graph"'/g' \
-			"$full_path" > "$raw_file"
+			"$full_path" > "$out_file"
 
-	if [[ "$query_file_name" == "11_check_if_ancestor.sql" ]]; then
-		if [[ "$query_set" == "baseline" ]]; then
-			cp "$raw_file" "$aliased_file"
-		else
-			ensure_ancestor_aliases "$raw_file" "$aliased_file"
-		fi
-		inject_ancestor_seqscan_hints "$aliased_file" "$hinted_file" "$query_set"
-	else
-		ensure_root_alias "$raw_file" "$aliased_file"
-		inject_seqscan_hint "$aliased_file" "$hinted_file"
-	fi
-	if [[ "$query_set" == "baseline" ]]; then
-		wrap_baseline_transaction "$hinted_file" "$out_file"
-	else
-		cp "$hinted_file" "$out_file"
-	fi
-	persist_hinted_query "$graph" "$full_path" "$out_file" "$scenario"
-	rm -f "$raw_file" "$aliased_file" "$hinted_file"
+	persist_rendered_query "$graph" "$full_path" "$out_file" "$scenario"
 }
 
 parse_timing_ms() {
@@ -670,21 +544,12 @@ measure_psql_timing_ms_null() {
 	local timing_out
 	timing_out="$(mktemp)"
 	if ! (
-		if [[ "$query_set" == "baseline" ]]; then
-			PGOPTIONS="-c statement_timeout=${TIMEOUT_MS} -c max_parallel_workers_per_gather=0" "${PSQL_BASE[@]}" \
-				-v graphname="$graph" \
-				-v nodetype="$nodetype" \
-				-v reltype="$reltype" \
-				-v rootid="$rootid" \
-				-f "$timing_script" > "$timing_out" 2>&1
-		else
-			"${PSQL_BASE[@]}" \
-				-v graphname="$graph" \
-				-v nodetype="$nodetype" \
-				-v reltype="$reltype" \
-				-v rootid="$rootid" \
-				-f "$timing_script" > "$timing_out" 2>&1
-		fi
+		PGOPTIONS="$(query_pgoptions)" "${PSQL_BASE[@]}" \
+			-v graphname="$graph" \
+			-v nodetype="$nodetype" \
+			-v reltype="$reltype" \
+			-v rootid="$rootid" \
+			-f "$timing_script" > "$timing_out" 2>&1
 	); then
 		if grep -Eqi 'statement timeout|canceling statement due to statement timeout' "$timing_out"; then
 			rm -f "$exec_file" "$timing_script" "$timing_out"
@@ -759,21 +624,12 @@ run_plan() {
 	plan_err="$(mktemp)"
 
 	if ! (
-		if [[ "$query_set" == "baseline" ]]; then
-			PGOPTIONS="-c statement_timeout=${TIMEOUT_MS} -c max_parallel_workers_per_gather=0" "${PSQL_BASE[@]}" \
-				-v graphname="$graph" \
-				-v nodetype="$nodetype" \
-				-v reltype="$reltype" \
-				-v rootid="$rootid" \
-				-f "$explain_file" > "$plan_file" 2> "$plan_err"
-		else
-			"${PSQL_BASE[@]}" \
-				-v graphname="$graph" \
-				-v nodetype="$nodetype" \
-				-v reltype="$reltype" \
-				-v rootid="$rootid" \
-				-f "$explain_file" > "$plan_file" 2> "$plan_err"
-		fi
+		PGOPTIONS="$(query_pgoptions)" "${PSQL_BASE[@]}" \
+			-v graphname="$graph" \
+			-v nodetype="$nodetype" \
+			-v reltype="$reltype" \
+			-v rootid="$rootid" \
+			-f "$explain_file" > "$plan_file" 2> "$plan_err"
 	); then
 		cat "$plan_err" > "$err_file"
 		rm -f "$tmpfile" "$exec_file" "$explain_file" "$plan_err"
@@ -813,21 +669,12 @@ run_results() {
 	query_err="$(mktemp)"
 
 	if ! (
-		if [[ "$query_set" == "baseline" ]]; then
-			PGOPTIONS="-c statement_timeout=${TIMEOUT_MS} -c max_parallel_workers_per_gather=0" "${PSQL_BASE[@]}" \
-				-v graphname="$graph" \
-				-v nodetype="$nodetype" \
-				-v reltype="$reltype" \
-				-v rootid="$rootid" \
-				-f "$exec_file" > "$result_file" 2> "$query_err"
-		else
-			"${PSQL_BASE[@]}" \
-				-v graphname="$graph" \
-				-v nodetype="$nodetype" \
-				-v reltype="$reltype" \
-				-v rootid="$rootid" \
-				-f "$exec_file" > "$result_file" 2> "$query_err"
-		fi
+		PGOPTIONS="$(query_pgoptions)" "${PSQL_BASE[@]}" \
+			-v graphname="$graph" \
+			-v nodetype="$nodetype" \
+			-v reltype="$reltype" \
+			-v rootid="$rootid" \
+			-f "$exec_file" > "$result_file" 2> "$query_err"
 	); then
 		cat "$query_err" > "$err_file"
 		rm -f "$tmpfile" "$exec_file" "$query_err"
@@ -950,6 +797,7 @@ current_job=0
 
 for base in "${BASES[@]}"; do
 	for query_file in "${QUERY_FILES[@]}"; do
+		CURRENT_QUERY_FILE="$query_file"
 		for graph in \
 			"${base}_baseline" \
 			"${base}_dewey" \

@@ -54,6 +54,7 @@ DECLARE
   con_post text;
   idx_edge_start text;
   idx_edge_end text;
+  idx_properties_gin text;
   idx_depth_dewey text;
   idx_depth_dewey_pattern text;
   idx_depth_pre text;
@@ -92,6 +93,7 @@ BEGIN
   con_post := format('%s_post_unique', node_tbl);
   idx_edge_start := format('%s_start_idx', edge_tbl);
   idx_edge_end := format('%s_end_idx', edge_tbl);
+  idx_properties_gin := format('%s_properties_gin_idx', node_tbl);
   idx_depth_dewey := format('%s_depth_dewey_idx', node_tbl);
   idx_depth_dewey_pattern := format('%s_depth_dewey_pattern_idx', node_tbl);
   idx_depth_pre := format('%s_depth_pre_idx', node_tbl);
@@ -111,6 +113,13 @@ BEGIN
     --   idx_edge_end, gname, edge_tbl
     -- );
     -- EXECUTE format('ANALYZE %I.%I', gname, edge_tbl);
+    -- Baseline has no derived node columns. Create the common start-node
+    -- lookup index only after all initialization work for this variant.
+    EXECUTE format(
+      'CREATE INDEX IF NOT EXISTS %I ON %I.%I USING gin (properties gin_agtype_ops)',
+      idx_properties_gin, gname, node_tbl
+    );
+    EXECUTE format('ANALYZE %I.%I', gname, node_tbl);
     RETURN;
   END IF;
 
@@ -223,7 +232,6 @@ BEGIN
       'CREATE INDEX IF NOT EXISTS %I ON %I.%I (depth, dewey text_pattern_ops)',
       idx_depth_dewey_pattern, gname, node_tbl
     );
-    EXECUTE format('ANALYZE %I.%I', gname, node_tbl);
   ELSE
     EXECUTE format('ALTER TABLE %I.%I ADD COLUMN IF NOT EXISTS pre integer', gname, node_tbl);
     EXECUTE format('ALTER TABLE %I.%I ADD COLUMN IF NOT EXISTS post integer', gname, node_tbl);
@@ -378,6 +386,14 @@ BEGIN
       'CREATE INDEX IF NOT EXISTS %I ON %I.%I (depth, pre)',
       idx_depth_pre, gname, node_tbl
     );
-    EXECUTE format('ANALYZE %I.%I', gname, node_tbl);
   END IF;
+
+  -- Start-node lookup is identical for baseline, Dewey, and Prepost. Build
+  -- the GIN index after deriving Dewey/PrePost values so those bulk updates
+  -- cannot leave stale entries or a large GIN pending list behind.
+  EXECUTE format(
+    'CREATE INDEX IF NOT EXISTS %I ON %I.%I USING gin (properties gin_agtype_ops)',
+    idx_properties_gin, gname, node_tbl
+  );
+  EXECUTE format('ANALYZE %I.%I', gname, node_tbl);
 END $$;
