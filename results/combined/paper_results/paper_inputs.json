@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "inputs": {
+    "age": {
+      "rows": 480,
+      "selection": "Overview TREE_GRAPHS; Query 01 root/leaf-parent and positive Query 11 q07/q08; all five runs and three methods",
+      "paper_csv": "results/age/paper_results/runtimes.csv",
+      "paper_sha256": "3ceedc66c20b60c024afbc364bd44ad66f8153b75e901292235cd61bfb350292"
+    },
+    "kuzu": {
+      "rows": 480,
+      "selection": "Overview TREE_GRAPHS; Query 01 root/leaf-parent and positive Query 11 q07/q08; all five runs and three methods",
+      "paper_csv": "results/kuzu/paper_results/runtimes.csv",
+      "paper_sha256": "ac82ab466e81ce85e59a811ab81e1c2df4036af884701ead9918e97bc4f2ec59"
+    },
+    "neo4j": {
+      "rows": 480,
+      "selection": "Overview TREE_GRAPHS; Query 01 root/leaf-parent and positive Query 11 q07/q08; all five runs and three methods",
+      "paper_csv": "results/neo4j/paper_results/runtimes.csv",
+      "paper_sha256": "6e270641dd94122ab6df3d04aa913bb279256b46de0f6f6b694349cf77f2f352"
+    },
+    "age_ldbc": {
+      "rows": 45,
+      "selection": "IC12, IS2, IS6",
+      "paper_csv": "results/age_ldbc/paper_results/runtimes.csv",
+      "paper_sha256": "77d5199bc782e77026542c877a7825167df06c3dfa4ea12799854d892fe91c31"
+    },
+    "kuzu_ldbc": {
+      "rows": 45,
+      "selection": "IC12, IS2, IS6",
+      "paper_csv": "results/kuzu_ldbc/paper_results/runtimes.csv",
+      "paper_sha256": "d3765516146991b06cbb477161f56deff18705d2902212779ae62f5576ce10a7"
+    },
+    "neo4j_ldbc": {
+      "rows": 45,
+      "selection": "IC12, IS2, IS6",
+      "paper_csv": "results/neo4j_ldbc/paper_results/runtimes.csv",
+      "paper_sha256": "3e0ab33f6f8e2c0dd307fbd46934d7ec05d039b647fb0b72cd57dffec7563177"
+    }
+  }
+}

@@ -8,3 +8,7 @@
 
 # VS Code
 .vscode/
+
+# Publish only frozen paper artifacts; keep local experiment runs private.
+/results/*/*
+!/results/*/paper_results/

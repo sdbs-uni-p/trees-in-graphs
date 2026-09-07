@@ -3,10 +3,15 @@
 
 import argparse
 import math
+import re
+from datetime import datetime
+from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+
+from create_runtime_tables import add_timeout_arguments, timeout_directories, new_combined_directory, write_sources
 
 from create_combined_runtime_tables import (
     SCENARIOS,
@@ -16,6 +21,7 @@ from create_combined_runtime_tables import (
     make_ldbc_rows,
     make_rows,
     svg_page,
+    render_pdf,
 )
 
 
@@ -50,6 +56,8 @@ LDBC_QUERY_LABELS = {
 
 
 def compact_graph(graph):
+    if graph == "F1000":
+        return "F1K"
     if graph.startswith("WT") and graph[2:].isdigit() and graph.endswith("000"):
         return graph[:-3] + "K"
     return graph
@@ -87,7 +95,7 @@ def selected_ldbc_rows(system_medians):
 
 
 def rounded_runtime(value):
-    if value == ">6 h":
+    if value.startswith(">"):
         return value
     return f"{float(value.replace(',', '')):,.1f}"
 
@@ -95,9 +103,12 @@ def rounded_runtime(value):
 def rounded_speedup(value):
     if value == "–":
         return value
-    lower_bound = value.startswith(">")
-    number = float(value.lstrip(">").rstrip("x").replace(",", ""))
-    prefix = ">" if lower_bound else ""
+    if value.startswith((">", "<")):
+        number = Decimal(value[1:].rstrip("x").replace(",", ""))
+        step = Decimal(1).scaleb(max(-2, number.adjusted() - 1))
+        rounded = number.quantize(step, rounding=ROUND_FLOOR if value[0] == ">" else ROUND_CEILING)
+        return value[0] + rounded_speedup(f"{rounded}x")
+    number = float(value.lstrip("><").rstrip("x").replace(",", ""))
     if number < 1:
         rendered = f"{number:.2f}"
     elif number < 10:
@@ -116,7 +127,22 @@ def rounded_speedup(value):
             rendered = f"{math.floor(thousands / 10 + 0.5) * 10:,.0f}K"
         else:
             rendered = f"{math.floor(thousands / 100 + 0.5) * 100:,.0f}K"
-    return f"{prefix}{rendered}x"
+    # Choose the display precision from the rounded value, so crossing a
+    # boundary cannot produce both 1.00/1.0, 10.0/10, or 1,000/1.0K.
+    rounded = float(rendered.rstrip("K").replace(",", ""))
+    if rendered.endswith("K"):
+        rounded *= 1000
+    if rounded < 1:
+        rendered = f"{rounded:.2f}"
+    elif rounded < 10:
+        rendered = f"{rounded:.1f}"
+    elif rounded < 1000:
+        rendered = f"{rounded:,.0f}"
+    elif rounded < 10000:
+        rendered = f"{rounded / 1000:.1f}K"
+    else:
+        rendered = f"{rounded / 1000:,.0f}K"
+    return f"{rendered}x"
 
 
 def rounded_rows(rows):
@@ -169,7 +195,7 @@ def content_widths(rows, subheadings):
             value = row[column]
             value_width = len(value) * character_width
             if column >= 3 and not value.endswith("x"):
-                plain_number = value.lstrip(">").replace(",", "")
+                plain_number = value.lstrip("><").replace(",", "")
                 try:
                     unusually_large_runtime = float(plain_number) >= 1_000_000
                 except ValueError:
@@ -183,28 +209,92 @@ def content_widths(rows, subheadings):
     return widths[:3], widths[3:]
 
 
+INPUT_FOLDERS = {
+    "age": "age", "kuzu": "kuzu", "neo4j": "neo4j",
+    "age_ldbc": "age_ldbc", "kuzu_ldbc": "kuzu_ldbc", "neo4j_ldbc": "neo4j_ldbc",
+}
+OUTPUT_NAMES = {
+    "detailed_output": "runtime_tables_exact.pdf",
+    "rounded_output": "runtime_tables_rounded.pdf",
+    "table_output": "runtime_table_compact.pdf",
+}
+
+
+def latest_input(directory):
+    """Select by the timestamp in the folder name, not filesystem modification time."""
+    candidates = []
+    if directory.is_dir():
+        for folder in directory.iterdir():
+            match = re.fullmatch(r"(\d{8}_\d{6})(?:_.+)?", folder.name)
+            if not folder.is_dir() or not match:
+                continue
+            try:
+                timestamp = datetime.strptime(match[1], "%Y%m%d_%H%M%S")
+            except ValueError:
+                continue
+            candidates.append((timestamp, folder.name, folder))
+    if not candidates:
+        selected = directory / "paper_results" / "runtimes.csv"
+    else:
+        # A suffix breaks ties deterministically (e.g. a merged folder after the raw run).
+        selected = max(candidates)[2] / "runtimes.csv"
+    if not selected.is_file():
+        raise ValueError(f"Selected result directory has no runtimes.csv: {selected.parent}; supply an explicit input CSV")
+    return selected
+
+
+def parse_arguments(argv=None, results_root=None):
+    results_root = results_root or Path(__file__).resolve().parents[1] / "results"
+    parser = argparse.ArgumentParser(description=__doc__)
+    for name, folder in INPUT_FOLDERS.items():
+        parser.add_argument(
+            "--" + name.replace("_", "-"), type=Path,
+            help=f"Input CSV or paper (default: runtimes.csv in the latest timestamped results/{folder}/ folder, or paper_results if none).",
+        )
+    for name, filename in OUTPUT_NAMES.items():
+        parser.add_argument(
+            "--" + name.replace("_", "-"), nargs="?", const=True, type=Path,
+            help=f"Generate this variant; optional PDF path (default: results/combined/<timestamp>/{filename}).",
+        )
+    add_timeout_arguments(parser)
+    args = parser.parse_args(argv)
+    try:
+        for name, folder in INPUT_FOLDERS.items():
+            if getattr(args, name) == Path("paper"):
+                setattr(args, name, results_root / folder / "paper_results" / "runtimes.csv")
+            elif getattr(args, name) is None:
+                setattr(args, name, latest_input(results_root / folder))
+        generate_all = all(getattr(args, name) is None for name in OUTPUT_NAMES)
+        default_directory = None
+        for name, filename in OUTPUT_NAMES.items():
+            value = getattr(args, name)
+            if generate_all or value is True:
+                if default_directory is None:
+                    default_directory = new_combined_directory(results_root)
+                setattr(args, name, default_directory / filename)
+        outputs = [getattr(args, name).resolve() for name in OUTPUT_NAMES if getattr(args, name) is not None]
+        if len(outputs) != len(set(outputs)):
+            raise ValueError("Output variants must use different PDF paths")
+    except ValueError as exc:
+        parser.error(str(exc))
+    return args
+
+
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--age", required=True, type=Path)
-    parser.add_argument("--kuzu", required=True, type=Path)
-    parser.add_argument("--neo4j", required=True, type=Path)
-    parser.add_argument("--age-ldbc", required=True, type=Path)
-    parser.add_argument("--kuzu-ldbc", required=True, type=Path)
-    parser.add_argument("--neo4j-ldbc", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--rounded-output", type=Path)
-    parser.add_argument("--table-output", type=Path)
-    args = parser.parse_args()
+    args = parse_arguments()
+    log_directories = timeout_directories(args.timeout_log_dir)
+    for name in INPUT_FOLDERS:
+        print(f"{name}: {getattr(args, name)}")
 
     tree_medians = {
-        "Apache AGE": load_medians(args.age),
-        "Kuzu": load_medians(args.kuzu),
-        "Neo4j": load_medians(args.neo4j),
+        "Apache AGE": load_medians(args.age, log_directories),
+        "Kuzu": load_medians(args.kuzu, log_directories),
+        "Neo4j": load_medians(args.neo4j, log_directories),
     }
     ldbc_medians = {
-        "Apache AGE": load_ldbc_medians(args.age_ldbc),
-        "Kuzu": load_ldbc_medians(args.kuzu_ldbc),
-        "Neo4j": load_ldbc_medians(args.neo4j_ldbc),
+        "Apache AGE": load_ldbc_medians(args.age_ldbc, log_directories),
+        "Kuzu": load_ldbc_medians(args.kuzu_ldbc, log_directories),
+        "Neo4j": load_ldbc_medians(args.neo4j_ldbc, log_directories),
     }
     if set(tree_medians) != set(SYSTEMS) or set(ldbc_medians) != set(SYSTEMS):
         raise ValueError("Missing DBMS input")
@@ -214,16 +304,19 @@ def main():
         raise ValueError(f"Expected 35 selected rows, found {len(exact_rows)}")
     rounded = rounded_rows(exact_rows)
     compact = compact_rows(rounded)
+    compact_timeout_notes = []
+    for row_number, row in enumerate(exact_rows, start=1):
+        for system_index, system in enumerate(SYSTEMS):
+            offset = 3 + system_index * 5
+            for method_index, method in ((1, "Dewey"), (2, "Prepost")):
+                value = row[offset + method_index]
+                if value.startswith(">"):
+                    compact_timeout_notes.append(
+                        f"Row {row_number} ({', '.join(row[:3])}), {system}: {method} timeout {value[1:]}."
+                    )
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="combined-overview-") as temp_name:
         temp = Path(temp_name)
-        rounded_output = args.rounded_output or args.output.with_name(
-            "runtime_tables_rounded.pdf"
-        )
-        table_output = args.table_output or args.output.with_name("runtime_table_only.pdf")
-        rounded_output.parent.mkdir(parents=True, exist_ok=True)
-        table_output.parent.mkdir(parents=True, exist_ok=True)
         common_options = {
             "leading_headings": ("Graph", "Query", "Parameters"),
             "graph_notes": False,
@@ -246,12 +339,20 @@ def main():
             "subheader_height": 14.5,
             "body_font_size": 9.1,
         }
+        if any(value.startswith(">") and not value.endswith("x") for row in exact_rows for value in row):
+            common_options["notes_override"] = tuple(
+                note.replace("All times are in ms.", "Measured times are in ms; timeout units are shown in cells.")
+                for note in common_options["notes_override"]
+            )
         variants = (
-            ("exact", args.output, exact_rows, ("B (ms)", "D", "P", "S_D", "S_P"), False),
-            ("rounded", rounded_output, rounded, ("B (ms)", "D", "P", "S_D", "S_P"), False),
-            ("compact", table_output, compact, ("B (ms)", "S_D", "S_P"), True),
+            ("exact", args.detailed_output, exact_rows, ("B (ms)", "D", "P", "S_D", "S_P"), False),
+            ("rounded", args.rounded_output, rounded, ("B (ms)", "D", "P", "S_D", "S_P"), False),
+            ("compact", args.table_output, compact, ("B (ms)", "S_D", "S_P"), True),
         )
         for name, output, rows, subheadings, table_only in variants:
+            if output is None:
+                continue
+            output.parent.mkdir(parents=True, exist_ok=True)
             leading_widths, metric_widths = content_widths(rows, subheadings)
             render_options = dict(common_options)
             if name == "rounded":
@@ -271,14 +372,18 @@ def main():
                     subheadings=subheadings,
                     table_only=table_only,
                     fit_content=not table_only,
+                    timeout_notes=compact_timeout_notes if table_only else (),
                 ),
                 encoding="utf-8",
             )
-            subprocess.run(["rsvg-convert", "-f", "pdf", "-o", pdf, svg], check=True)
+            render_pdf(svg, pdf)
             shutil.copyfile(pdf, output)
-    print(args.output)
-    print(rounded_output)
-    print(table_output)
+            print(output)
+    write_sources(
+        {name: getattr(args, name) for name in INPUT_FOLDERS},
+        [getattr(args, name) for name in OUTPUT_NAMES if getattr(args, name) is not None],
+        log_directories,
+    )
 
 
 if __name__ == "__main__":

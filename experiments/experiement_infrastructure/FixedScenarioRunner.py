@@ -9,6 +9,8 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
+from .ResultMetadata import write_run_metadata
+
 from tqdm import tqdm
 
 
@@ -143,6 +145,12 @@ def run_fixed_scenarios(
     queries = _read_queries(query_path)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_run_metadata(
+        output_path.parent, workload="tree", executors=executors, runs=runs, warmup=heat,
+        query_path=query_path, parameters_path=parameters_path, scenario_filter=scenario_filter,
+        structural_primary_keys=structural_primary_keys, save_plans=save_plans,
+        save_results=save_results, save_queries=save_queries,
+    )
     artifact_root = output_path.parent
     artifact_dirs = {
         "plans": artifact_root / "plans",

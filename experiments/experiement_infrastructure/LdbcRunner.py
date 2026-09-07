@@ -7,6 +7,8 @@ import json
 import subprocess
 from pathlib import Path
 
+from .ResultMetadata import write_run_metadata
+
 METHODS = ("baseline", "dewey", "prepost")
 STRUCTURAL_PARAMETERS = {
     "interactive-complex-12": ("TagClass", "name", "Monarch", "base"),
@@ -85,6 +87,11 @@ def run_ldbc(executors, query_path, output_dir, *, runs=5, heat=0,
         raise ValueError("runs must be positive and heat must not be negative")
     query_path, output_dir = Path(query_path), Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    write_run_metadata(
+        output_dir, workload="ldbc", executors=executors, runs=runs, warmup=heat,
+        query_path=query_path, query_filter=query_filter, save_plans=save_plans,
+        save_results=save_results, save_queries=save_queries,
+    )
     dirs = {name: output_dir / name for name in ("queries", "plans", "results", "errors")}
     enabled = {"queries": save_queries, "plans": save_plans,
                "results": save_results, "errors": True}

@@ -6,13 +6,30 @@ import csv
 import html
 import math
 import shutil
-import statistics
 import subprocess
 import tempfile
 from collections import defaultdict
 from pathlib import Path
 
-from create_runtime_tables import speedup_color
+from create_runtime_tables import (
+    speedup_color, runtime_text, runtime_speedup, read_runtime, median_runtime,
+    add_timeout_arguments, timeout_directories, TIMEOUT_NOTE, BOUND_NOTE,
+    new_combined_directory, write_sources,
+)
+
+
+def render_pdf(svg, pdf):
+    """Render with the installed DejaVu Serif fonts; reject silent substitution."""
+    for style in ("Book", "Bold", "Italic", "Bold Italic"):
+        family = subprocess.check_output(
+            ["fc-match", "--format=%{family}", f"DejaVu Serif:style={style}"], text=True,
+        ).strip()
+        if "DejaVu Serif" not in family.split(","):
+            raise ValueError(
+                "DejaVu Serif is not available through Fontconfig. "
+                "Install it (Debian/Ubuntu: fonts-dejavu-core) before generating PDFs."
+            )
+    subprocess.run(["rsvg-convert", "-f", "pdf", "-o", pdf, svg], check=True)
 
 
 METHODS = ("baseline", "dewey", "prepost")
@@ -89,25 +106,19 @@ def graph_sort_key(graph):
     raise ValueError(label)
 
 
-def load_medians(path):
+def load_medians(path, log_directories=None):
     values = defaultdict(list)
     with path.open(newline="", encoding="utf-8-sig") as handle:
         for row in csv.DictReader(handle):
             graph, method = split_graph(row["graph"].strip())
-            runtime = row["runtime_ms"].strip()
             values[(graph, row["query"], row["scenario"], method)].append(
-                None if not runtime else float(runtime)
+                read_runtime(path, row, log_directories)
             )
     medians = {}
     for key, runs in values.items():
         if len(runs) != 5:
             raise ValueError(f"Expected five runs for {key}, found {len(runs)}")
-        if any(value is None for value in runs):
-            if not all(value is None for value in runs):
-                raise ValueError(f"Partial timeout for {key}")
-            medians[key] = None
-        else:
-            medians[key] = statistics.median(runs)
+        medians[key] = median_runtime(runs, key)
     return medians
 
 
@@ -119,18 +130,8 @@ def select_scenario(medians, graph, query, method, candidates):
     raise KeyError(f"No scenario {candidates} for {graph}, {query}, {method}")
 
 
-def format_runtime(value):
-    return ">6 h" if value is None else f"{value:,.3f}"
-
-
-def format_speedup(baseline, method):
-    if baseline is None and method is None:
-        return "–"
-    if method is None:
-        return "–"
-    if baseline is None:
-        return f">{6 * 60 * 60 * 1000 / method:,.3f}x"
-    return f"{baseline / method:,.3f}x"
+format_runtime = runtime_text
+format_speedup = runtime_speedup
 
 
 def make_rows(system_medians, query, scenarios=None):
@@ -213,7 +214,7 @@ def report_pages(system_medians):
 def numeric_speedup(text):
     if text == "–":
         return None
-    number = text.lstrip(">").rstrip("x").replace(",", "")
+    number = text.lstrip("><").rstrip("x").replace(",", "")
     multiplier = 1000 if number.endswith("K") else 1
     if multiplier != 1:
         number = number[:-1]
@@ -261,6 +262,7 @@ def svg_page(
     body_font_size=8.2,
     table_only=False,
     fit_content=False,
+    timeout_notes=(),
 ):
     if leading_widths is None:
         leading_widths = [50, 126]
@@ -273,18 +275,19 @@ def svg_page(
         raise ValueError(
             "metric_widths must contain one system group or all three groups"
         )
+    has_timeout = any(value.startswith((">", "<")) for row in rows for value in row)
     widths = list(leading_widths) + list(metric_widths)
     table_width = sum(widths)
     total_header = header_height + subheader_height
     if table_only:
         left, top = 1, 1
         width = table_width + 2
-        height = total_header + len(rows) * row_height + 2
+        height = total_header + len(rows) * row_height + 2 + (15 + len(timeout_notes) * 12 if timeout_notes else 0)
         physical_size = f'width="{width}" height="{height}"'
     elif fit_content:
         left, top = 30, 52
         width = max(table_width + 60, 920)
-        height = top + total_header + len(rows) * row_height + 130
+        height = top + total_header + len(rows) * row_height + 130 + (60 if has_timeout else 0)
         physical_size = f'width="{width}" height="{height}"'
     else:
         width, height = 1191, 842
@@ -296,7 +299,7 @@ def svg_page(
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" {physical_size} viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="white"/>',
-        '<g font-family="Liberation Serif, DejaVu Serif, serif" fill="#111">',
+        '<g font-family="DejaVu Serif" fill="#111">',
     ]
     if not table_only:
         parts.append(
@@ -371,7 +374,7 @@ def svg_page(
             numeric = column >= leading_columns
             center_x = (xs[column] + xs[column + 1]) / 2
             center_y = y + row_height / 2
-            weight = "bold" if value.startswith(">") else "normal"
+            weight = "bold" if value.startswith((">", "<")) else "normal"
             if numeric:
                 # Tabular digits retain column alignment while rendering Kx
                 # and x as normal text, avoiding collisions between glyphs.
@@ -430,11 +433,13 @@ def svg_page(
             f'stroke="#222" stroke-width="{stroke_width}"/>'
         )
     if table_only:
+        for index, note in enumerate(timeout_notes):
+            parts.append(f'<text x="{left}" y="{bottom + 15 + index * 12}" font-size="7.5">{html.escape(note)}</text>')
         parts.extend(("</g>", "</svg>"))
         return "\n".join(parts)
-    has_runtime_timeout = any(">6 h" in value for row in rows for value in row)
+    has_runtime_timeout = any(value.startswith(">") and not value.endswith("x") for row in rows for value in row)
     has_lower_bound = any(
-        row[column].startswith(">")
+        row[column].startswith((">", "<"))
         for row in rows
         for column in speedup_columns
     )
@@ -446,26 +451,26 @@ def svg_page(
     notes = ["Runtimes: median of five runs in milliseconds (ms)."]
     timeout_parts = []
     if has_runtime_timeout:
-        timeout_parts.append('">6 h" denotes a runtime timeout')
+        timeout_parts.append(TIMEOUT_NOTE)
     if has_lower_bound:
-        timeout_parts.append('">" denotes a timeout-derived speedup lower bound')
+        timeout_parts.append(BOUND_NOTE)
     if has_double_timeout:
         timeout_parts.append('"–" means both methods timed out')
     if timeout_parts:
-        notes.append("Timeouts: " + "; ".join(timeout_parts) + ".")
+        notes.extend(timeout_parts)
     if graph_notes:
         notes.append(
             "Graphs: F = forest; NT = truebase; DT = ultratall; WT = ultrawide; "
             "SNB/C, SNB/P, SNB/T = SNB SF1 trees; SNB = full SNB SF1 graph."
         )
     if notes_override is not None:
-        notes = list(notes_override)
+        notes = list(notes_override) + timeout_parts
     for index, note in enumerate(notes):
         parts.append(
             f'<text x="{left}" y="{bottom + 17 + index * 12}" '
             f'font-size="7.5">{svg_rich_text(note)}</text>'
         )
-    legend_y = bottom + 75
+    legend_y = bottom + (max(75, 29 + len(notes) * 12) if has_timeout else 75)
     label_width, bar_width, bar_height = 95, 360, 12
     bar_x = left + label_width
     parts.append(
@@ -519,28 +524,22 @@ def svg_page(
     return "\n".join(parts)
 
 
-def load_ldbc_medians(path):
+def load_ldbc_medians(path, log_directories=None):
     values = defaultdict(list)
     with path.open(newline="", encoding="utf-8-sig") as handle:
         for row in csv.DictReader(handle):
             graph, method = split_graph(row["graph"].strip())
             if graph != "snb_sf1":
                 raise ValueError(f"Unexpected LDBC graph: {graph}")
-            runtime = row["runtime_ms"].strip()
             values[(row["query"].strip(), method)].append(
-                None if not runtime else float(runtime)
+                read_runtime(path, row, log_directories)
             )
 
     medians = {}
     for key, runs in values.items():
         if len(runs) != 5:
             raise ValueError(f"Expected five runs for {key}, found {len(runs)}")
-        if any(value is None for value in runs):
-            if not all(value is None for value in runs):
-                raise ValueError(f"Partial timeout for {key}")
-            medians[key] = None
-        else:
-            medians[key] = statistics.median(runs)
+        medians[key] = median_runtime(runs, key)
     return medians
 
 
@@ -589,8 +588,10 @@ def main():
     parser.add_argument("--age", required=True, type=Path)
     parser.add_argument("--kuzu", required=True, type=Path)
     parser.add_argument("--neo4j", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--output", type=Path, help="Output PDF (default: results/combined/<timestamp>/runtime_tables.pdf).")
+    add_timeout_arguments(parser)
     args = parser.parse_args()
+    log_directories = timeout_directories(args.timeout_log_dir)
     inputs = {
         "Apache AGE": args.age,
         "Kuzu": args.kuzu,
@@ -605,7 +606,9 @@ def main():
         raise ValueError("All inputs must use the same CSV format")
     input_kind = input_kinds.pop()
     loader = load_medians if input_kind == "tree" else load_ldbc_medians
-    medians = {system: loader(path) for system, path in inputs.items()}
+    medians = {system: loader(path, log_directories) for system, path in inputs.items()}
+    if args.output is None:
+        args.output = new_combined_directory() / "runtime_tables.pdf"
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="combined-runtime-tables-") as temp_name:
         temp = Path(temp_name)
@@ -622,8 +625,9 @@ def main():
         for number, (title, rows, leading_headings, graph_notes) in enumerate(
             pages, start=1
         ):
-            expected_rows = 40 if input_kind == "tree" else 3
-            if len(rows) != expected_rows:
+            # Tree graph selections vary; only the LDBC report has a fixed row count.
+            expected_rows = 3
+            if input_kind == "ldbc" and len(rows) != expected_rows:
                 raise ValueError(
                     f"Expected {expected_rows} rows for {title}, found {len(rows)}"
                 )
@@ -633,11 +637,12 @@ def main():
                 svg_page(title, rows, leading_headings, graph_notes),
                 encoding="utf-8",
             )
-            subprocess.run(["rsvg-convert", "-f", "pdf", "-o", pdf, svg], check=True)
+            render_pdf(svg, pdf)
             page_pdfs.append(pdf)
         combined = temp / "runtime_tables.pdf"
         subprocess.run(["pdfunite", *page_pdfs, combined], check=True)
         shutil.copyfile(combined, args.output)
+    write_sources(inputs, [args.output], log_directories)
     print(args.output)
 
 

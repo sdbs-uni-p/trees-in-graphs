@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "paper_csv": "results/age_maintenance/paper_results/runtimes.csv",
+  "paper_sha256": "f898c33ae7753292a792b32d8f92749dcb45279b564fd7e9baecc98de7394630",
+  "rows": 1200,
+  "graphs": 20,
+  "queries": 4,
+  "methods": [
+    "baseline",
+    "dewey",
+    "prepost"
+  ],
+  "runs_per_group": 5,
+  "selection": "All graph/query/method measurements; no missing runtimes."
+}

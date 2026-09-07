@@ -120,6 +120,35 @@ if ((SAVE_RESULTS)); then
 fi
 printf 'graph,query,run,runtime_ms\n' > "$CSV_FILE"
 
+# Record the effective CLI/ENV settings before measurements. Git may not be mounted in Docker.
+metadata_commit="${GIT_COMMIT:-}"
+if [[ -z "$metadata_commit" ]] && command -v git >/dev/null 2>&1; then
+    metadata_commit="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse HEAD 2>/dev/null || true)"
+fi
+"${PSQL_AT[@]}" -X -A -t -v ON_ERROR_STOP=1 \
+    -v metadata_commit="$metadata_commit" -v runs="$RUNS" -v warmup="$WARMUP" \
+    -v timeout_ms="$TIMEOUT_MS" -v query_filter="$QUERY_FILTER" \
+    -v dataset_filter="$DATASET_FILTER" -v scenario_filter="${SCENARIO_FILTER:-}" \
+    -v save_plans="$SAVE_PLANS" -v save_results="$SAVE_RESULTS" -v save_queries="$SAVE_QUERIES" \
+    -v parameters_file="${PARAMETERS_FILE:-}" -v query_root="${QUERY_ROOT:-}" \
+    -v note="$NOTE" > "$OUTPUT_DIR/metadata.json" <<'METADATA_SQL'
+SELECT jsonb_pretty(jsonb_build_object(
+    'schema_version', 1, 'created_at', CURRENT_TIMESTAMP, 'system', 'Apache AGE',
+    'workload', 'maintenance', 'git_commit', NULLIF(:'metadata_commit', ''),
+    'runs', :'runs'::integer, 'warmup_runs', :'warmup'::integer,
+    'timeout_ms', :'timeout_ms'::bigint, 'timeout_source', 'runner statement_timeout',
+    'settings', jsonb_build_object(
+        'query_filter', :'query_filter', 'dataset_filter', :'dataset_filter',
+        'scenario_filter', :'scenario_filter', 'parameters_file', :'parameters_file',
+        'query_root', :'query_root', 'note', :'note',
+        'save_plans', :'save_plans'::integer = 1,
+        'save_results', :'save_results'::integer = 1,
+        'save_queries', :'save_queries'::integer = 1
+    )
+));
+METADATA_SQL
+
+
 if [[ -n "${NOTE//[[:space:]]/}" ]]; then
 	NOTES_FILE="$RESULTS_BASE/age_maintenance/notes.txt"
 	mkdir -p "$(dirname "$NOTES_FILE")"

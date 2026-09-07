@@ -71,6 +71,13 @@ The entry flow is:
   columns and variant-specific indexes have been populated, followed by
   `ANALYZE`. This keeps bulk annotation updates out of the GIN maintenance
   path and gives every freshly initialized variant a compact lookup index.
+- The GIN index supports lookup of the imported `__id__` start-node property
+  consistently across baseline, Dewey, and PrePost graphs.
+
+AGE experiment sessions disable parallel query workers for all three variants;
+no planner hints are injected. The ancestor-descendant query also runs with
+JIT disabled so that its measured execution does not include JIT compilation
+effects.
 
 ## Important log prefixes in container output
 

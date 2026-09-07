@@ -4,7 +4,14 @@
 import argparse
 import csv
 import html
+import json
+import hashlib
+from datetime import datetime, timezone
 import math
+import os
+import re
+from dataclasses import dataclass
+from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
 import shutil
 import statistics
 import subprocess
@@ -13,7 +20,184 @@ from collections import defaultdict
 from pathlib import Path
 
 
-TIMEOUT_MS = 6 * 60 * 60 * 1000
+TIMEOUT_LOGS = defaultdict(set)
+
+
+def new_combined_directory(results_root=None):
+    root = results_root or Path(__file__).resolve().parents[1] / "results"
+    parent = root / "combined"
+    parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    for suffix in range(10000):
+        directory = parent / (timestamp + (f"_{suffix:04d}" if suffix else ""))
+        try:
+            directory.mkdir()
+            return directory
+        except FileExistsError:
+            continue
+    raise ValueError("Cannot allocate a unique combined report directory")
+
+
+def write_sources(inputs, outputs, log_directories):
+    """Keep provenance per output, including when several reports share a directory."""
+    def fingerprint(path):
+        path = Path(path).resolve()
+        return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+
+    sources = {}
+    for name, path in inputs.items():
+        path = Path(path).resolve()
+        sources[name] = {
+            "csv": fingerprint(path),
+            "timeout_logs": [fingerprint(log) for log in sorted(TIMEOUT_LOGS[path])],
+        }
+        metadata = path.parent / "metadata.json"
+        if metadata.is_file():
+            sources[name]["metadata"] = fingerprint(metadata)
+    for output in outputs:
+        output = Path(output).resolve()
+        destination = output.parent / "sources.json"
+        payload = {"schema_version": 1, "reports": {}}
+        if destination.exists():
+            payload = json.loads(destination.read_text(encoding="utf-8"))
+            if payload.get("schema_version") != 1 or not isinstance(payload.get("reports"), dict):
+                raise ValueError(f"Unsupported provenance file: {destination}")
+        payload["reports"][output.name] = {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "output": fingerprint(output), "inputs": sources,
+        }
+        def portable(value):
+            if isinstance(value, dict):
+                result = {}
+                for key, item in value.items():
+                    if key == "timeout_log_directories":
+                        continue  # Only actual input files belong in the manifest.
+                    if key == "path":
+                        source = Path(item)
+                        source = source.resolve() if source.is_absolute() else (destination.parent / source).resolve()
+                        if output.parent.name == "paper_results":
+                            results_root = Path(__file__).resolve().parents[1] / "results"
+                            try:
+                                relative = source.relative_to(results_root)
+                            except ValueError:
+                                raise ValueError("Paper provenance may reference only files inside results/<system>/paper_results")
+                            if len(relative.parts) < 3 or relative.parts[1] != "paper_results" or not source.is_file():
+                                raise ValueError("Paper provenance requires existing paper_results files; copy the required inputs/logs there first")
+                        result[key] = Path(os.path.relpath(source, destination.parent)).as_posix()
+                    else:
+                        result[key] = portable(item)
+                return result
+            if isinstance(value, list):
+                return [portable(item) for item in value]
+            return value
+
+        payload = portable(payload)
+        payload["path_base"] = "directory containing sources.json"
+        temporary = destination.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        temporary.replace(destination)
+
+
+@dataclass(frozen=True)
+class Timeout:
+    milliseconds: int
+
+
+def add_timeout_arguments(parser):
+    parser.add_argument(
+        "--timeout-log-dir", action="append", default=[], metavar="CSV=ERRORS_DIR",
+        help="Use an explicit errors directory for a CSV (repeatable for merged inputs).",
+    )
+
+
+def timeout_directories(specifications):
+    directories = defaultdict(list)
+    for specification in specifications:
+        csv_name, separator, directory = specification.partition("=")
+        if not separator or not csv_name or not directory:
+            raise ValueError("Expected --timeout-log-dir CSV=ERRORS_DIR")
+        location = Path(directory).resolve()
+        if not location.is_dir():
+            raise ValueError(f"Timeout log directory does not exist: {location}")
+        directories[Path(csv_name).resolve()].append(location)
+    return directories
+
+
+def read_runtime(path, row, log_directories=None):
+    """Read a measurement, requiring per-run log evidence for every missing value."""
+    if row["runtime_ms"].strip():
+        value = float(row["runtime_ms"])
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"Invalid runtime in {path}: {row}")
+        return value
+    graph = row["graph"].strip()
+    _, method = split_graph(graph)
+    stem = f"{graph}_{method}_{row['query'].strip()}"
+    if "scenario" in row:
+        stem += f"_{row['scenario'].strip()}"
+    stem = re.sub(r"[/\\: ]", "_", stem)
+    filename = f"{stem}_run{row['run'].strip()}.log"
+    directories = (log_directories or {}).get(Path(path).resolve(), [Path(path).parent / "errors"])
+    logs = [directory / filename for directory in directories if (directory / filename).is_file()]
+    if not logs:
+        raise ValueError(
+            f"Missing runtime in {path}, but no matching timeout log {filename}. "
+            "Provide --timeout-log-dir CSV=ERRORS_DIR for original/merged results."
+        )
+    limits = set()
+    for log in logs:
+        content = log.read_text(encoding="utf-8").strip()
+        match = re.fullmatch(
+            r"(?:Query timed out after |Skipped run \d+: run 1 timed out after )(\d+) ms\.",
+            content,
+        )
+        if not match or int(match[1]) <= 0:
+            raise ValueError(f"Missing runtime is not a confirmed timeout with a positive limit: {log}")
+        limits.add(int(match[1]))
+        TIMEOUT_LOGS[Path(path).resolve()].add(log.resolve())
+    if len(limits) != 1:
+        raise ValueError(f"Conflicting timeout limits for {filename}: {sorted(limits)}; select the correct source logs")
+    return Timeout(limits.pop())
+
+
+def median_runtime(runs, key):
+    timed_out = [value for value in runs if isinstance(value, Timeout)]
+    if timed_out:
+        if len(timed_out) != len(runs):
+            raise ValueError(f"Mixed successful measurements and timeouts for {key}")
+        if len(set(timed_out)) != 1:
+            raise ValueError(f"Different timeout limits within measurement group {key}")
+        return timed_out[0]
+    return statistics.median(runs)
+
+
+def timeout_text(value):
+    for unit, divisor in (("h", 3600000), ("min", 60000), ("s", 1000), ("ms", 1)):
+        if value.milliseconds % divisor == 0:
+            return f">{value.milliseconds // divisor:,} {unit}"
+
+
+def runtime_speedup(baseline, method):
+    if isinstance(baseline, Timeout) and isinstance(method, Timeout):
+        return "–"
+    if isinstance(method, Timeout):
+        return bound_text(Decimal(str(baseline)) / method.milliseconds, "<") + "x"
+    if isinstance(baseline, Timeout):
+        return bound_text(Decimal(baseline.milliseconds) / Decimal(str(method)), ">") + "x"
+    return speedup_text(baseline / method)
+
+
+def bound_text(value, direction, signed=False):
+    """Round outward so a displayed bound never claims more than the evidence."""
+    rounded = Decimal(str(value)).quantize(
+        Decimal("0.001"), rounding=ROUND_FLOOR if direction == ">" else ROUND_CEILING
+    )
+    return direction + format(rounded, "+,.3f" if signed else ",.3f")
+
+
+TIMEOUT_NOTE = 'Timeouts: each >T runtime cell gives the logged limit T for that row and method (unit shown).'
+BOUND_NOTE = 'Speedup bounds use those limits in the same row/system; > is a lower bound, < an upper bound.'
+
 METHODS = ("baseline", "dewey", "prepost")
 QUERY_ORDER = (
     "01_all_descendants",
@@ -67,7 +251,7 @@ def split_graph(graph):
         suffix = "_" + method
         if graph.endswith(suffix):
             return graph[: -len(suffix)], method
-    raise ValueError(f"Unbekannte Repräsentation: {graph}")
+    raise ValueError(f"Unknown representation: {graph}")
 
 
 def graph_label(graph):
@@ -87,7 +271,7 @@ def graph_label(graph):
     }
     if graph in snb:
         return snb[graph]
-    raise ValueError(f"Unbekannter Graph: {graph}")
+            raise ValueError(f"Unknown graph: {graph}")
 
 
 def graph_sort_key(graph):
@@ -97,11 +281,11 @@ def graph_sort_key(graph):
     for prefix, order in (("F", 0), ("NT", 1), ("DT", 2), ("WT", 3)):
         if label.startswith(prefix):
             return order, int(label[len(prefix) :])
-    raise ValueError(f"Unbekanntes Graphkürzel: {label}")
+    raise ValueError(f"Unknown graph abbreviation: {label}")
 
 
 def runtime_text(value):
-    return ">6 h" if value is None else f"{value:,.3f}"
+    return timeout_text(value) if isinstance(value, Timeout) else f"{value:,.3f}"
 
 
 def speedup_text(ratio, lower_bound=False):
@@ -109,26 +293,20 @@ def speedup_text(ratio, lower_bound=False):
     return f"{prefix}{ratio:,.3f}x"
 
 
-def load_groups(path):
+def load_groups(path, log_directories=None):
     values = defaultdict(list)
     with path.open(newline="", encoding="utf-8-sig") as handle:
         for row in csv.DictReader(handle):
             graph, method = split_graph(row["graph"].strip())
-            runtime = row["runtime_ms"].strip()
             values[(graph, row["query"].strip(), row["scenario"].strip(), method)].append(
-                None if not runtime else float(runtime)
+                read_runtime(path, row, log_directories)
             )
 
     groups = {}
     for key, runs in values.items():
         if len(runs) != 5:
-            raise ValueError(f"Erwartet wurden fünf Läufe für {key}, gefunden: {len(runs)}")
-        if any(value is None for value in runs):
-            if not all(value is None for value in runs):
-                raise ValueError(f"Teilweiser Timeout in {key}; bitte Behandlung klären")
-            groups[key] = None
-        else:
-            groups[key] = statistics.median(runs)
+            raise ValueError(f"Expected five runs for {key}, found {len(runs)}")
+        groups[key] = median_runtime(runs, key)
     return groups
 
 
@@ -144,19 +322,7 @@ def make_rows(groups, query, scenarios=None):
     output = []
     for graph, scenario in keys:
         times = {method: groups[(graph, query, scenario, method)] for method in METHODS}
-        speedups = []
-        for method in ("dewey", "prepost"):
-            if times["baseline"] is None and times[method] is None:
-                speedups.append("–")
-            elif times[method] is None:
-                raise ValueError(
-                    f"Unerwarteter Fall: {method}-Timeout bei vorhandener Baseline: "
-                    f"{graph}, {query}, {scenario}"
-                )
-            elif times["baseline"] is None:
-                speedups.append(speedup_text(TIMEOUT_MS / times[method], True))
-            else:
-                speedups.append(speedup_text(times["baseline"] / times[method]))
+        speedups = [runtime_speedup(times["baseline"], times[method]) for method in ("dewey", "prepost")]
         output.append(
             [
                 graph_label(graph),
@@ -239,8 +405,8 @@ def groff_document(groups):
             ]
         )
         rows = make_rows(groups, query, scenarios)
-        has_timeout = any(">6 h" in row for row in rows)
-        has_lower_bound = any(value.startswith(">") for row in rows for value in row[5:])
+        has_timeout = any(value.startswith((">", "<")) and not value.endswith("x") for row in rows for value in row)
+        has_lower_bound = any(value.startswith((">", "<")) for row in rows for value in row[5:])
         has_double_timeout = any(value == "–" for row in rows for value in row[5:])
         previous_graph = None
         for row in rows:
@@ -259,12 +425,12 @@ def groff_document(groups):
                 "SNB/C = Comment, SNB/P = Place, SNB/T = Tagclass (SNB SF1).",
                 ".br",
                 "\\fBRuntimes:\\fP median of five runs, in ms, right-aligned."
-                + (" \\(dq>6 h\\(dq denotes a timeout." if has_timeout else ""),
+                + (" \\(dq>T\\(dq gives the logged timeout for that row/method, with units." if has_timeout else ""),
                 ".br",
                 "\\fBSpeedup Dewey\\fP = Baseline / Dewey; "
                 "\\fBSpeedup Prepost\\fP = Baseline / Prepost."
                 + (
-                    " \\(dq>\\(dq denotes a lower bound calculated using the 6 h timeout."
+                    " \\(dq>\\(dq denotes a lower bound; < an upper bound, using the logged limit in the same row."
                     if has_lower_bound
                     else ""
                 )
@@ -277,7 +443,7 @@ def groff_document(groups):
 def speedup_value(text):
     if text == "–":
         return None
-    return float(text.lstrip(">").rstrip("x").replace(",", ""))
+    return float(text.lstrip("><").rstrip("x").replace(",", ""))
 
 
 def interpolate_color(start, end, amount):
@@ -348,7 +514,7 @@ def svg_page(title, rows, columns=None, column_widths=None):
             right_aligned = columns[column_index] not in {"Graph", "Parameters", "Query"}
             x = x_positions[column_index + 1] - 4 if right_aligned else x_positions[column_index] + 4
             anchor = "end" if right_aligned else "start"
-            weight = "bold" if value.startswith(">") else "normal"
+            weight = "bold" if value.startswith((">", "<")) else "normal"
             if right_aligned:
                 # librsvg does not reliably honor OpenType's `tnum` feature.
                 # Position proportional sans-serif glyphs on fixed-width slots instead.
@@ -381,9 +547,9 @@ def svg_page(title, rows, columns=None, column_widths=None):
         parts.append(f'<line x1="{x}" y1="{top}" x2="{x}" y2="{table_bottom}" stroke="#222" stroke-width="0.65"/>')
     parts.append(f'<line x1="{left}" y1="{table_bottom}" x2="{left + table_width}" y2="{table_bottom}" stroke="#111"/>')
 
-    has_timeout = any(">6 h" in row for row in rows)
+    has_timeout = any(value.startswith((">", "<")) and not value.endswith("x") for row in rows for value in row)
     speedup_values = [row[index] for row in rows for index in speedup_columns]
-    has_lower_bound = any(value.startswith(">") for value in speedup_values)
+    has_lower_bound = any(value.startswith((">", "<")) for value in speedup_values)
     has_double_timeout = any(value == "–" for value in speedup_values)
     notes = []
     is_ldbc = columns[0] == "Query"
@@ -393,18 +559,15 @@ def svg_page(title, rows, columns=None, column_widths=None):
             "SNB/C = Comment, SNB/P = Place, SNB/T = Tagclass (SNB SF1).",
         ))
     notes.extend([
-        (
-            "Runtimes: median of measured runs, in milliseconds (ms)."
-            if is_ldbc
-            else "Runtimes: median of measured runs."
-        ) + (' ">6 h" denotes a timeout.' if has_timeout else ""),
-        "Speedup Dewey = Baseline / Dewey; "
-        "Speedup Prepost = Baseline / Prepost."
-        + (' ">" denotes a lower bound calculated using the 6 h timeout.' if has_lower_bound else "")
-        + (' "-" denotes a timeout for both methods.' if has_double_timeout else ""),
+        "Runtimes: median of measured runs, in milliseconds (ms)." if is_ldbc else "Runtimes: median of measured runs.",
+        "Speedup Dewey = Baseline / Dewey; Speedup Prepost = Baseline / Prepost.",
     ])
+    if has_timeout:
+        notes.append(TIMEOUT_NOTE)
     if has_lower_bound:
-        notes.append("Bold values are derived from a timeout.")
+        notes.extend((BOUND_NOTE, "Bold values are derived from a timeout."))
+    if has_double_timeout:
+        notes.append('"–" denotes a timeout for both methods; no speedup bound can be determined.')
     if is_ldbc:
         notes.append(
             "Speedup colors: red = slowdown; yellow = 1x; green = speedup; "
@@ -444,41 +607,26 @@ def svg_page(title, rows, columns=None, column_widths=None):
     return "\n".join(parts)
 
 
-def load_ldbc_rows(path):
+def load_ldbc_rows(path, log_directories=None):
     values = defaultdict(list)
     with path.open(newline="", encoding="utf-8-sig") as handle:
         for row in csv.DictReader(handle):
             graph, method = split_graph(row["graph"].strip())
             if graph != "snb_sf1":
-                raise ValueError(f"Unerwarteter LDBC-Graph: {graph}")
-            runtime = row["runtime_ms"].strip()
-            values[(row["query"].strip(), method)].append(None if not runtime else float(runtime))
+                raise ValueError(f"Unexpected LDBC graph: {graph}")
+            values[(row["query"].strip(), method)].append(read_runtime(path, row, log_directories))
 
     medians = {}
     for key, runs in values.items():
         if not runs:
-            raise ValueError(f"Keine Läufe für {key} gefunden")
-        if any(value is None for value in runs):
-            if not all(value is None for value in runs):
-                raise ValueError(f"Teilweiser Timeout in {key}; bitte Behandlung klären")
-            medians[key] = None
-        else:
-            medians[key] = statistics.median(runs)
+                raise ValueError(f"No runs found for {key}")
+        medians[key] = median_runtime(runs, key)
 
     query_order = list(dict.fromkeys(query for query, _ in values))
     rows = []
     for query in query_order:
         times = {method: medians[(query, method)] for method in METHODS}
-        speedups = []
-        for method in ("dewey", "prepost"):
-            if times["baseline"] is None and times[method] is None:
-                speedups.append("–")
-            elif times[method] is None:
-                raise ValueError(f"Unerwarteter {method}-Timeout bei vorhandener Baseline: {query}")
-            elif times["baseline"] is None:
-                speedups.append(speedup_text(TIMEOUT_MS / times[method], True))
-            else:
-                speedups.append(speedup_text(times["baseline"] / times[method]))
+        speedups = [runtime_speedup(times["baseline"], times[method]) for method in ("dewey", "prepost")]
         display_query = query.replace("interactive-complex-", "Interactive Complex ").replace(
             "interactive-short-", "Interactive Short "
         )
@@ -493,7 +641,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
+    add_timeout_arguments(parser)
     args = parser.parse_args()
+    log_directories = timeout_directories(args.timeout_log_dir)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="runtime-tables-") as temp_dir_name:
         temp_dir = Path(temp_dir_name)
@@ -501,7 +651,7 @@ def main():
         with args.input.open(newline="", encoding="utf-8-sig") as handle:
             fieldnames = csv.DictReader(handle).fieldnames or []
         if "scenario" in fieldnames:
-            groups = load_groups(args.input)
+            groups = load_groups(args.input, log_directories)
             pages = [
                 (title, make_rows(groups, query, scenarios), None, None)
                 for title, query, scenarios in report_pages(groups)
@@ -511,7 +661,7 @@ def main():
         else:
             pages = [(
                 "LDBC SNB SF1",
-                load_ldbc_rows(args.input),
+                load_ldbc_rows(args.input, log_directories),
                 ("Query", "Baseline (ms)", "Dewey (ms)", "Prepost (ms)", "Speedup Dewey", "Speedup Prepost"),
                 (220, 100, 100, 100, 121, 121),
             )]

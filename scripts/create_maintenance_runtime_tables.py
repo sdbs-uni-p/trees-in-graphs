@@ -8,13 +8,15 @@ import csv
 import html
 import math
 import shutil
-import statistics
 import subprocess
 import tempfile
 from collections import defaultdict
 from pathlib import Path
 
-from create_runtime_tables import graph_label, graph_sort_key, interpolate_color, runtime_text
+from create_runtime_tables import (
+    graph_label, graph_sort_key, interpolate_color, runtime_text, Timeout,
+    read_runtime, median_runtime, add_timeout_arguments, timeout_directories, TIMEOUT_NOTE, bound_text,
+)
 
 
 METHODS = ("baseline", "dewey", "prepost")
@@ -43,29 +45,26 @@ def split_graph(graph: str) -> tuple[str, str]:
         suffix = f"_{method}"
         if graph.endswith(suffix):
             return graph[: -len(suffix)], method
-    raise ValueError(f"Unbekannte Repräsentation: {graph}")
+    raise ValueError(f"Unknown representation: {graph}")
 
 
-def load_medians(path: Path) -> dict[tuple[str, str, str], float]:
-    values: dict[tuple[str, str, str], list[float]] = defaultdict(list)
+def load_medians(path: Path, log_directories=None) -> dict[tuple[str, str, str], float | Timeout]:
+    values: dict[tuple[str, str, str], list[float | Timeout]] = defaultdict(list)
     with path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
         required = {"graph", "query", "run", "runtime_ms"}
         missing = required - set(reader.fieldnames or ())
         if missing:
-            raise ValueError(f"Fehlende Spalten: {sorted(missing)}")
+            raise ValueError(f"Missing columns: {sorted(missing)}")
         for row in reader:
             graph, method = split_graph(row["graph"].strip())
-            runtime = row["runtime_ms"].strip()
-            if not runtime:
-                raise ValueError(f"Timeout wird für Maintenance-Tabellen noch nicht unterstützt: {row}")
-            values[(graph, row["query"].strip(), method)].append(float(runtime))
+            values[(graph, row["query"].strip(), method)].append(read_runtime(path, row, log_directories))
 
     medians = {}
     for key, runs in values.items():
         if len(runs) != 5:
-            raise ValueError(f"Erwartet wurden fünf Läufe für {key}, gefunden: {len(runs)}")
-        medians[key] = statistics.median(runs)
+            raise ValueError(f"Expected five runs for {key}, found {len(runs)}")
+        medians[key] = median_runtime(runs, key)
     return medians
 
 
@@ -74,7 +73,7 @@ def cost_text(value: float) -> str:
 
 
 def make_rows(
-    medians: dict[tuple[str, str, str], float], query: str
+    medians: dict[tuple[str, str, str], float | Timeout], query: str
 ) -> list[tuple[list[str], tuple[float, float]]]:
     graphs = sorted(
         {graph for graph, candidate, _ in medians if candidate == query},
@@ -83,23 +82,36 @@ def make_rows(
     rows = []
     for graph in graphs:
         times = {method: medians[(graph, query, method)] for method in METHODS}
-        costs = (
-            times["dewey"] - times["baseline"],
-            times["prepost"] - times["baseline"],
-        )
+        costs = []
+        cost_labels = []
+        for method in ("dewey", "prepost"):
+            baseline, indexed = times["baseline"], times[method]
+            if isinstance(baseline, Timeout) and isinstance(indexed, Timeout):
+                cost_labels.append("–")
+                costs.append(math.nan)
+            elif isinstance(baseline, Timeout):
+                cost_labels.append(bound_text(indexed - baseline.milliseconds, "<", signed=True))
+                costs.append(math.nan)
+            elif isinstance(indexed, Timeout):
+                cost_labels.append(bound_text(indexed.milliseconds - baseline, ">", signed=True))
+                costs.append(math.nan)
+            else:
+                costs.append(indexed - baseline)
+                cost_labels.append(cost_text(costs[-1]))
         rows.append(([
             graph_label(graph),
             PARAMETER_LABELS[query],
             runtime_text(times["baseline"]),
             runtime_text(times["dewey"]),
             runtime_text(times["prepost"]),
-            cost_text(costs[0]),
-            cost_text(costs[1]),
-        ], costs))
+            *cost_labels,
+        ], tuple(costs)))
     return rows
 
 
 def cost_color(value: float, maximum: float) -> str:
+    if not math.isfinite(value):
+        return "#eeeeee"
     if maximum <= 0 or value == 0:
         return "#ffe680"
     amount = math.log1p(abs(value)) / math.log1p(maximum)
@@ -177,6 +189,12 @@ def svg_page(
         "Runtimes: median of five runs. Maintenance cost = indexed representation - Baseline, in milliseconds (ms).",
         "Cost colors: green = lower than Baseline; yellow = zero; red = higher than Baseline. Intensity uses a logarithmic global scale.",
     )
+    if any(isinstance(value, str) and value.startswith(">") for row, _ in rows for value in row[2:5]):
+        notes += (
+            TIMEOUT_NOTE,
+            "Costs: > = lower bound; < = upper bound; – = both methods timed out. Bounds use the limits in the same row.",
+            "Gray cost cells are bounds or unavailable values; they are not exact measured differences.",
+        )
     note_y = table_bottom + 16
     for line_number, note in enumerate(notes):
         parts.append(f'<text x="{left}" y="{note_y + line_number * 11}" font-size="7.5">{html.escape(note)}</text>')
@@ -202,15 +220,22 @@ def svg_page(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=Path)
-    parser.add_argument("output", type=Path)
+    parser.add_argument(
+        "output", nargs="?", type=Path,
+        help="Output PDF (default: runtime_tables.pdf beside the input CSV).",
+    )
+    add_timeout_arguments(parser)
     args = parser.parse_args()
+    if args.output is None:
+        args.output = args.input.with_name("runtime_tables.pdf")
+    log_directories = timeout_directories(args.timeout_log_dir)
 
-    medians = load_medians(args.input)
+    medians = load_medians(args.input, log_directories)
     missing = set(QUERY_ORDER) - {query for _, query, _ in medians}
     if missing:
-        raise ValueError(f"Queries fehlen: {sorted(missing)}")
+        raise ValueError(f"Missing queries: {sorted(missing)}")
     page_rows = {query: make_rows(medians, query) for query in QUERY_ORDER}
-    maximum_cost = max(abs(cost) for rows in page_rows.values() for _, costs in rows for cost in costs)
+    maximum_cost = max((abs(cost) for rows in page_rows.values() for _, costs in rows for cost in costs if math.isfinite(cost)), default=0)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="maintenance-runtime-tables-") as temp_name:

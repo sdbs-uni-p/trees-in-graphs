@@ -11,3 +11,7 @@ results/neo4j/*/raw/*_100000.json filter=lfs diff=lfs merge=lfs -text
 *.yml text eol=lf
 *.yaml text eol=lf
 Dockerfile text eol=lf
+
+# Keep published input checksums stable across platforms.
+results/**/paper_results/*.csv text eol=lf
+results/**/paper_results/*.json text eol=lf

@@ -1,16 +1,7 @@
 # Trees in Graphs: Benchmarking Tree Queries in Property Graphs
-This repository contains the full experimental setup for the paper [Seeing the Trees for the Forest: Leveraging Tree-Shaped Substructures in Property Graphs](https://arxiv.org/abs/2603.12476). It includes database-specific query suites, execution scripts, generated reference results, and instructions to reproduce the paper setup.
+This repository contains the full experimental setup for the paper "Seeing the Trees for the Forest: Leveraging Tree-Shaped Substructures in Property Graphs". It includes database-specific query suites, execution scripts, generated reference results, and instructions to reproduce the paper setup. An older technical report can be found [here](https://arxiv.org/abs/2603.12476).
 
-In addition to raw and aggregated result files, the repository provides visual artifacts. These include speedup heatmaps for [Kuzu](results/kuzu/paper_results/analysis/speedup_heatmap.png) and [Neo4j](results/neo4j/paper_results/analysis/speedup_heatmap.png), as well as cross-system speedup plots for Kuzu and Apache AGE (one plot per query; x-axis abbreviations: `WT 1` = Wide tree (100 nodes), `WT 2` = Wide tree (1,000 nodes), `WT 3` = Wide tree (10,000 nodes), `DT` = Deep tree (10,000 nodes), `TF` = Tiny Forest (40 nodes), `SNB/C` = Comment tree in full LDBC SNB SF1 graph, `SNB/P` = Place tree in full LDBC SNB SF1 graph, `SNB/T` = Tagclass tree in full LDBC SNB SF1 graph):
-- [Find all descendants of a fixed node](results/combined/paper_results/speedup_all_descendants_kuzu_age.pdf)
-- [Find all children of a fixed node](results/combined/paper_results/speedup_all_children_kuzu_age.pdf)
-- [Find all leaves of a fixed node](results/combined/paper_results/speedup_all_leaves_kuzu_age.pdf)
-- [Check the ancestor-descendant relationship of two fixed nodes](results/combined/paper_results/speedup_check_if_ancestor_kuzu_age.pdf)
-
-Furthermore, for three official LDBC SNB interactive queries, without using structural indexes, the queries, plans, and results are provided:
-- [Queries](queries/age/ldbc/)
-- [Execution plans](results/age/paper_results/ldbc/plans/)
-- [Query results](results/age/paper_results/ldbc/results/)
+The speedups of the scenarios discussed in the paper are presented [here](results/combined/paper_results/runtime_tables_rounded.pdf).
 
 For a quick start, use the container setup below and then run the experiment/report commands in the documented order.
 
@@ -18,24 +9,29 @@ For a quick start, use the container setup below and then run the experiment/rep
 
 - [Setup](#setup)
   - [Kuzu](#kuzu)
+    - [Kuzu LDBC](#kuzu-ldbc)
   - [Neo4j](#neo4j)
+    - [Neo4j LDBC](#neo4j-ldbc)
   - [Apache AGE](#apache-age)
+    - [AGE maintenance](#age-maintenance)
+    - [AGE LDBC](#age-ldbc)
 - [Running Experiments](#running-experiments)
   - [Kuzu](#kuzu-1)
+    - [Kuzu LDBC](#kuzu-ldbc-1)
   - [Neo4j](#neo4j-1)
+    - [Neo4j LDBC](#neo4j-ldbc-1)
   - [Apache AGE](#apache-age-1)
+    - [AGE maintenance](#age-maintenance-1)
+    - [AGE LDBC](#age-ldbc-1)
 - [Queries](#queries)
   - [Directory Structure](#directory-structure)
   - [Encoding Schemes](#encoding-schemes)
   - [Query Naming](#query-naming)
   - [Comparing Queries across Systems and Schemes](#comparing-queries-across-systems-and-schemes)
 - [Generating Reports](#generating-reports)
-  - [Kuzu and Neo4j](#kuzu-and-neo4j)
-    - [Heatmap](#heatmap)
-  - [Apache AGE](#apache-age-2)
-  - [Cross-system Comparisons](#cross-system-comparisons)
-    - [Speedup Plots per Query](#speedup-plots-per-query)
-    - [Baseline Runtime Comparison for Kuzu and Apache AGE](#baseline-runtime-comparison-for-kuzu-and-apache-age)
+  - [Single-system runtime tables](#single-system-runtime-tables)
+  - [Maintenance runtime tables](#maintenance-runtime-tables)
+  - [Combined runtime tables](#combined-runtime-tables)
 - [Datasets](#datasets)
   - [Artificial Trees and Forests](#artificial-trees-and-forests)
   - [LDBC Social Network Benchmark](#ldbc-social-network-benchmark)
@@ -55,7 +51,18 @@ docker compose up -d
 
 The entrypoint automatically runs `docker/kuzu/init/00_init_kuzu.py` on first startup, which creates one Kuzu database per graph variant under the `kuzu_treebench_data` Docker volume. The container is ready when the healthcheck passes (it polls for a `.initialized` sentinel file).
 
-To avoid Linux permission conflicts when using `docker exec --user <uid>:<gid>`, the Kuzu entrypoint normalizes `/kuzu_data` permissions during startup.
+#### Kuzu LDBC
+
+Start the container from the `docker/kuzu_ldbc/` directory:
+
+```bash
+cd docker/kuzu_ldbc
+docker compose up -d --build
+```
+
+The LDBC container initializes the complete SNB SF1 databases for the
+`baseline`, `dewey`, and `prepost` representations. It is ready when the
+healthcheck finds `.initialized` and `max_depths.json`.
 
 ### Neo4j
 
@@ -77,6 +84,18 @@ docker compose up -d
 
 The init container automatically runs `docker/neo4j/init/00_init_neo4j.py`, which creates one Neo4j database per graph variant. It is ready when the healthcheck passes (it polls for a `.initialized` sentinel file).
 
+#### Neo4j LDBC
+
+Start the database and initialization containers from `docker/neo4j_ldbc/`:
+
+```bash
+cd docker/neo4j_ldbc
+docker compose up -d --build
+```
+
+The initialization container populates the complete SNB SF1 databases for the
+`baseline`, `dewey`, and `prepost` representations.
+
 ### Apache AGE
 
 A `.env` file is required in `docker/age/` with the database credentials. The defaults are:
@@ -94,9 +113,9 @@ cd docker/age
 docker compose up -d
 ```
 
-The AGE container automatically runs a resumable init chain (`entrypoint-resumable-init.sh` + `run-all-init.sh`) that creates graphs, loads prepared data, and builds tree indexes. It is ready when the healthcheck passes (it checks for `.init_complete` and `pg_isready`). The index step creates the same GIN index on the AGE `properties` column for baseline, Dewey, and PrePost so that all variants resolve the imported `__id__` start-node property through the same index. AGE experiment sessions disable parallel query workers for all three variants; no planner hints are injected.
+The AGE container automatically runs a resumable init chain (`entrypoint-resumable-init.sh` + `run-all-init.sh`) that creates graphs, loads prepared data, and builds tree indexes. It is ready when the healthcheck passes (it checks for `.init_complete` and `pg_isready`).
 
-#### AGE maintenance setup
+#### AGE maintenance
 
 Start the container from the `docker/age_maintenance/` directory:
 
@@ -108,42 +127,22 @@ docker compose up -d --build
 Maintenance uses a separate PostgreSQL volume so that its writes do not affect
 the regular AGE benchmark database.
 
+#### AGE LDBC
+
+Start the container from the `docker/age_ldbc/` directory:
+
+```bash
+cd docker/age_ldbc
+docker compose up -d --build
+```
+
+The LDBC container initializes the complete SNB SF1 graphs for the `baseline`,
+`dewey`, and `prepost` representations and is ready when `.init_complete` is
+present and PostgreSQL is ready.
+
 ---
 
 ## Running Experiments
-
-### LDBC experiments with Kuzu and Neo4j
-
-The three LDBC SNB SF1 queries also have isolated, engine-native setups. Each
-setup creates complete `snb_sf1_baseline`, `snb_sf1_dewey`, and
-`snb_sf1_prepost` databases; unlike the unsuffixed tree setups, all three tree
-labels (`Comment`, `Place`, and `TagClass`) are annotated together.
-
-```bash
-docker compose -f docker/kuzu_ldbc/docker-compose.yml up -d --build
-docker exec -it -u "$(id -u):$(id -g)" -w /project kuzu_ldbc_treebench \
-  python -m experiments.kuzu_ldbc.kuzu_ldbc_experiment_def
-
-docker compose -f docker/neo4j_ldbc/docker-compose.yml up -d --build
-docker exec -it -u "$(id -u):$(id -g)" -w /project neo4j_ldbc_treebench_init \
-  python -m experiments.neo4j_ldbc.neo4j_ldbc_experiment_def
-```
-
-The runners default to five measured executions and write timestamped outputs
-to `results/kuzu_ldbc/` and `results/neo4j_ldbc/`. Every run contains
-`runtimes.csv`, `runtime_tables.pdf`, and (by default) `queries/`, `plans/`,
-`results/`, and `errors/`. Configure the run with `EXPERIMENT_N`,
-`EXPERIMENT_HEAT`, `QUERY_FILTER`, `SAVE_QUERIES`, `SAVE_PLANS`, and
-`SAVE_RESULTS` environment variables. `QUERY_FILTER` accepts comma-separated
-names or globs such as `interactive-short-*`.
-
-For annotated LDBC queries, fixed logical parameters are resolved to their
-indexed Dewey or PrePost keys before timing, following the same approach as
-the unsuffixed Kuzu/Neo4j fixed-scenario runner. This setup work is not part of
-`runtime_ms`. The measured Short 2 query still selects its ten recent messages
-itself; Comment roots are then found structurally before the remaining
-baseline path is evaluated. Runs intentionally use no explicit warmup by
-default; reports use the median of the measured executions.
 
 On Linux, `docker exec` runs as `root` by default. This can create root-owned files/directories on bind mounts (for example under `results/`), which then causes permission issues on the host.
 
@@ -166,6 +165,10 @@ docker exec -it -u "$(id -u):$(id -g)" -w /project kuzu_treebench python -m expe
 Results are written to `results/kuzu/<YYYYMMDD_HHMMSS>/runtimes.csv`.
 Reference results are stored under `results/kuzu/paper_results/runtimes.csv`.
 
+The regular Kuzu tree experiments run four queries: `01_all_descendants`,
+`02_all_children`, `05_all_leaves`, and `11_check_if_ancestor`. The separate
+LDBC runner below executes the three interactive SNB queries.
+
 To run only the negative ancestor scenarios without warmup, with five measured
 runs and all artifacts enabled:
 
@@ -176,6 +179,24 @@ docker exec -u "$(id -u):$(id -g)" -w /project \
   -e SAVE_QUERIES=1 -e SAVE_PLANS=1 -e SAVE_RESULTS=1 \
   kuzu_treebench python -m experiments.kuzu.kuzu_experiment_def
 ```
+
+#### Kuzu LDBC
+
+The native Kuzu and Neo4j LDBC runners execute the three interactive SNB SF1
+queries against complete `snb_sf1_baseline`, `snb_sf1_dewey`, and
+`snb_sf1_prepost` databases. All three tree labels (`Comment`, `Place`, and
+`TagClass`) are annotated together. Their fixed logical parameters are resolved
+before the timed execution; this setup work is not part of `runtime_ms`.
+
+```bash
+docker exec -it -w /project kuzu_ldbc_treebench \
+  python -m experiments.kuzu_ldbc.kuzu_ldbc_experiment_def
+```
+
+The runner defaults to five measured executions per query and writes results
+under `results/kuzu_ldbc/`. Use `EXPERIMENT_N`, `EXPERIMENT_HEAT`,
+`QUERY_FILTER`, `SAVE_QUERIES`, `SAVE_PLANS`, and `SAVE_RESULTS` to configure
+the run. `QUERY_FILTER` accepts comma-separated query names or globs.
 
 ### Neo4j
 
@@ -194,6 +215,9 @@ docker exec -it -u "$(id -u):$(id -g)" -w /project neo4j_treebench_init python -
 Results are written to `results/neo4j/<YYYYMMDD_HHMMSS>/runtimes.csv`.
 Reference results are stored under `results/neo4j/paper_results/runtimes.csv`.
 
+The regular Neo4j tree experiments run the same four queries as Kuzu. The
+separate LDBC runner above executes the three interactive SNB queries.
+
 To run only the negative ancestor scenarios without warmup, with five measured
 runs and all artifacts enabled:
 
@@ -204,6 +228,16 @@ docker exec -u "$(id -u):$(id -g)" -w /project \
   -e SAVE_QUERIES=1 -e SAVE_PLANS=1 -e SAVE_RESULTS=1 \
   neo4j_treebench_init python -m experiments.neo4j.neo4j_experiment_def
 ```
+
+#### Neo4j LDBC
+
+```bash
+docker exec -it -w /project neo4j_ldbc_treebench_init \
+  python -m experiments.neo4j_ldbc.neo4j_ldbc_experiment_def
+```
+
+The runner uses the same LDBC options as Kuzu and writes results under
+`results/neo4j_ldbc/`.
 
 ### Apache AGE
 
@@ -282,38 +316,10 @@ docker exec -it -u "$(id -u):$(id -g)" -w /experiments age_treebench bash run_ex
 Results are written to a timestamped folder `results/age/<YYYYMMDD_HHMMSS>`.
 Reference results for the paper setup are stored under `results/age/paper_results/`.
 
-Create a runtime-table PDF from a completed five-run result CSV with:
-
-```bash
-python scripts/create_runtime_tables.py \
-  results/age/<YYYYMMDD_HHMMSS>/runtimes.csv \
-  results/age/<YYYYMMDD_HHMMSS>/runtime_tables.pdf
-```
-
-The script accepts both complete benchmark CSVs and query-specific CSVs. When
-`q09` or `q10` is present, Query 11 is rendered on separate positive and
-negative pages so that each page retains the existing two-scenarios-per-graph
-layout. Creating the PDF requires `rsvg-convert` and `pdfunite`.
-
-For a combined AGE/Kuzu/Neo4j PDF, all three completed five-run CSVs must
-contain the same scenarios:
-
-```bash
-python scripts/create_combined_runtime_tables.py \
-  --age results/age/<run>/runtimes.csv \
-  --kuzu results/kuzu/<run>/runtimes.csv \
-  --neo4j results/neo4j/<run>/runtimes.csv \
-  --output results/combined/<run>/runtime_tables.pdf
-```
-
-#### AGE maintenance experiments
+#### AGE maintenance
 
 Maintenance experiments are started via `run_experiments.sh` in the
 `age_treebench_maintenance` container.
-
-The isolated setup creates the baseline, Dewey, and PrePost graphs in its own
-PostgreSQL volume. All variants use the same GIN index for `__id__` start-node
-lookup and run with parallel query workers disabled.
 
 Options:
 
@@ -380,7 +386,7 @@ artifacts for SNB.
 
 Results are written to `results/age_maintenance/<YYYYMMDD_HHMMSS>/runtimes.csv`.
 
-#### Experiments on Official LDBC SNB Queries
+#### AGE LDBC
 
 Experiments on the official LDBC SNB interactive queries are run via `experiments/age_ldbc/run_experiments.sh` in the `age_ldbc_treebench` container, using the baseline, Dewey, and pre/post query sets under `queries/age_ldbc/`.
 
@@ -426,11 +432,22 @@ docker exec -it -u "$(id -u):$(id -g)" -w /experiments/age_ldbc age_ldbc_treeben
 
 The script writes runtimes and the requested results and plans to a timestamped folder under `results/age_ldbc/`.
 
+Unlike the native Kuzu and Neo4j LDBC runners, the AGE runner passes its query
+parameters directly to the rendered SQL files; it does not perform a separate
+structural-parameter lookup before timing.
+
 ---
 
 ## Queries
 
 The `queries/` directory contains all tree-traversal query implementations, organised by database system and tree-encoding scheme.
+
+The three committed official LDBC SNB interactive queries are available as
+original Cypher under `queries/age_ldbc/original/` and as adapted queries under
+`queries/age_ldbc/{baseline,dewey,prepost}/`,
+`queries/kuzu_ldbc/{baseline,dewey,prepost}/`, and
+`queries/neo4j_ldbc/{baseline,dewey,prepost}/`. Their benchmark outputs are
+stored under the corresponding `results/*_ldbc/` directories.
 
 ### Directory Structure
 
@@ -440,18 +457,36 @@ queries/
 │   ├── baseline/       # 4 queries
 │   ├── dewey/          # 4 queries
 │   ├── prepost/        # 4 queries
-│   └── ldbc/           # 3 official SNB queries, original (cypher) and adapted for AGE (sql)
+├── age_ldbc/
+│   ├── baseline/       # 3 official SNB queries adapted for AGE
+│   ├── dewey/          # 3 official SNB queries with Dewey annotations
+│   ├── original/       # 3 original Cypher queries
+│   └── prepost/        # 3 official SNB queries with PrePost annotations
+├── age_maintenance/
+│   ├── baseline/       # 4 rolled-back insertion operations
+│   ├── dewey/          # 4 insertion operations with Dewey annotations
+│   └── prepost/        # 4 insertion operations with PrePost annotations
 ├── kuzu/
-│   ├── baseline/       # 12 queries
-│   ├── dewey/          # 12 queries
-│   └── prepost/        # 12 queries
-└── neo4j/
-    ├── baseline/       # 12 queries
-    ├── dewey/          # 12 queries
-    └── prepost/        # 12 queries
+│   ├── baseline/       # 10 queries
+│   ├── dewey/          # 10 queries
+│   └── prepost/        # 10 queries
+├── kuzu_ldbc/
+│   ├── baseline/       # 3 official SNB queries
+│   ├── dewey/          # 3 official SNB queries with Dewey annotations
+│   └── prepost/        # 3 official SNB queries with PrePost annotations
+├── neo4j/
+│   ├── baseline/       # 10 queries
+│   ├── dewey/          # 10 queries
+│   └── prepost/        # 10 queries
+└── neo4j_ldbc/
+    ├── baseline/       # 3 official SNB queries
+    ├── dewey/          # 3 official SNB queries with Dewey annotations
+    └── prepost/        # 3 official SNB queries with PrePost annotations
 ```
 
-Neo4j and Kuzu each implement 10 distinct operations per encoding (30 files each); AGE implements a subset of 4 operations per encoding (12 files total).
+Kuzu and Neo4j each implement 10 queries per encoding. AGE
+implements only 4 queries per encoding: `01`, `02`, `05`, and
+`11`. LDBC and maintenance are separate workloads with their own query names.
 
 ### Encoding Schemes
 
@@ -465,7 +500,9 @@ Each database system implements the same logical operations under three differen
 
 ### Query Naming
 
-Files follow the pattern `{NN}_{operation}.sql`, where the numeric prefix groups equivalent operations across schemes and systems:
+Tree query files follow the pattern `{NN}_{operation}.sql`, where the numeric
+prefix groups equivalent tree operations across the baseline, Dewey, and
+PrePost implementations:
 
 | ID | Operation |
 |---|---|
@@ -480,6 +517,19 @@ Files follow the pattern `{NN}_{operation}.sql`, where the numeric prefix groups
 | `12` | `check_same_subtree` (negative case) |
 | `14` | `check_if_ancestor` (negative case) |
 
+Official LDBC query files use names such as `interactive-short-2.sql`,
+`interactive-short-6.sql`, and `interactive-complex-12.sql` rather than the
+tree-operation numbers.
+
+Maintenance query files use the scenario IDs `01` to `04`:
+
+| ID | Maintenance operation |
+|---|---|
+| `01` | Insert the last child under the last root |
+| `02` | Insert the first child under the first root |
+| `03` | Insert the last root |
+| `04` | Insert the first root |
+
 ### Comparing Queries across Systems and Schemes
 
 To compare queries that implement the same logical operation, open the three scheme variants side-by-side. For example, for `all_descendants` on Neo4j:
@@ -490,7 +540,8 @@ queries/neo4j/dewey/01_all_descendants.sql
 queries/neo4j/prepost/01_all_descendants.sql
 ```
 
-The numeric prefix is stable across systems, so the same ID in `queries/kuzu/baseline/` and `queries/age/baseline/` implements the same logical operation — making cross-system, same-scheme comparisons straightforward as well.
+The numeric prefix is stable across the regular tree-query implementations.
+LDBC and maintenance queries are compared within their respective workloads.
 
 All queries are parameterised (e.g. `$NODE_TYPE`, `$rootID`); the experiment runners substitute concrete values at runtime.
 
@@ -498,231 +549,107 @@ All queries are parameterised (e.g. `$NODE_TYPE`, `$rootID`); the experiment run
 
 ## Generating Reports
 
-### Kuzu and Neo4j
+All current report commands operate on the timestamped `runtimes.csv` files
+written by the experiment runners. The scripts require Python 3.10 or newer,
+`rsvg-convert`, and `pdfunite`.
 
-`scripts/kuzu_neo4j_report.py` takes a directory of raw JSON result files and writes report files to an analysis directory.
+### Single-system runtime tables
 
-| File | Description |
-|---|---|
-| `results.csv` | Median client-side runtime per graph / query / annotation |
-| `slowdown.csv` | Every annotated (graph, query, annotation) combination ranked by slowdown relative to baseline |
-| `speedup_heatmap.png` | Side-by-side heatmap of dewey and prepost speedup over baseline |
-
-Usage:
+Create a PDF for regular AGE tree results, LDBC results, or a query-specific
+CSV with:
 
 ```bash
-python scripts/kuzu_neo4j_report.py \
-    --raw-results <path-to-json-dir> \
-    [--output <analysis-dir>] \
-    [--gdms <name>]
+python scripts/create_runtime_tables.py \
+  results/age/<run>/runtimes.csv \
+  results/age/<run>/runtime_tables.pdf
 ```
 
-| Argument | Required | Description |
-|---|---|---|
-| `--raw-results` | Yes | Directory containing the raw `.json` result files (typically `results/<db>/<tag>/raw`) |
-| `--output` | No | Analysis output directory (default: sibling `analysis` when `--raw-results` ends with `raw`) |
-| `--gdms` | No | Database system name shown in the heatmap title (default: `Kuzu`) |
-
-Reproducing the Paper Results:
-
-Kuzu:
-```bash
-python scripts/kuzu_neo4j_report.py \
-    --raw-results results/kuzu/paper_results/raw
-```
-
-Neo4j:
-```bash
-python scripts/kuzu_neo4j_report.py \
-    --raw-results results/neo4j/paper_results/raw \
-    --gdms Neo4j
-```
-
-#### Heatmap
-
-> **The generated heatmaps (`speedup_heatmap.png`) are written to the `--output` directory you specify.**
-
-For the example commands above, the heatmaps are located at:
-
-| Run | Heatmap path |
+| Argument | Description |
 |---|---|
-| Kuzu | `results/kuzu/paper_results/analysis/speedup_heatmap.png` |
-| Neo4j | `results/neo4j/paper_results/analysis/speedup_heatmap.png` |
+| `INPUT` | Runtime CSV to render. Supports regular Tree and LDBC result formats. |
+| `OUTPUT` | PDF path to create. |
+| `--timeout-log-dir CSV=ERRORS_DIR` | Use timeout/error logs from another directory; repeatable for copied or merged CSVs. |
 
-### Apache AGE
+Use the corresponding `results/kuzu/`, `results/neo4j/`, `results/age_ldbc/`,
+`results/kuzu_ldbc/`, or `results/neo4j_ldbc/` path for other workloads. The
+script renders regular tree scenarios and the three LDBC queries using the
+same Baseline, Dewey, and PrePost runtime columns.
 
-The AGE reference results are generated directly by the AGE experiment script (`experiments/age/run_experiments.sh`) analogously to Kuzu/Neo4j runs.
-
-Reference and run output locations:
-
-| Path | Description |
-|---|---|
-| `results/age/paper_results/` | AGE paper/reference result folder |
-| `results/age/<YYYYMMDD_HHMMSS>/` | AGE timestamped result folder generated by an experiment run |
-
-Typical AGE output files/folders inside these directories:
-
-| File/Folder | Description |
-|---|---|
-| `runtimes.csv` | AGE runtimes CSV (`graph,query,scenario,run,runtime_ms`) used by cross-system comparison scripts |
-| `plans/` | Saved explain plans (`--save-plans`) |
-| `results/` | Saved query result payloads (`--save-results`) |
-| `queries/` | Saved executed queries (`--save-queries`) |
-| `errors/` | Error/timeout logs generated during execution |
-
-This CSV is the AGE input used by the cross-system comparison scripts below.
-
-#### AGE maintenance reports
-
-Maintenance runs are stored under `results/age_maintenance/<YYYYMMDD_HHMMSS>/`.
-
-Create the maintenance runtime table with:
+### Maintenance runtime tables
 
 ```bash
 python scripts/create_maintenance_runtime_tables.py \
-  results/age_maintenance/<YYYYMMDD_HHMMSS>/runtimes.csv \
-  results/age_maintenance/<YYYYMMDD_HHMMSS>/runtime_tables.pdf
+  results/age_maintenance/<run>/runtimes.csv \
+  results/age_maintenance/<run>/runtime_tables.pdf
 ```
 
-The PDF has one page per maintenance scenario. Each page lists the median
-Baseline, Dewey, and Prepost runtimes for the selected graphs, together with
-the maintenance-cost differences `Dewey - Baseline` and `Prepost - Baseline`.
-The cost columns use a logarithmic color scale.
-
-#### Experiments on Official LDBC SNB Queries
-
-The three committed interactive LDBC SNB queries are available as original Cypher under `queries/age_ldbc/original/` and as Apache AGE SQL under `queries/age_ldbc/{baseline,dewey,prepost}/`. New benchmark outputs are stored under `results/age_ldbc/`.
-
-### Cross-system Comparisons
-
-#### Speedup Plots per Query
-
-`scripts/plot_speedups.py`
-
-Creates per-query speedup PDFs from AGE, Kuzu, and/or Neo4j results.
-
-| Output | Description |
+| Argument | Description |
 |---|---|
-| `speedup_<query>.pdf` | One speedup chart per query found in the provided input CSVs |
+| `INPUT` | Maintenance `runtimes.csv`. |
+| `OUTPUT` | Optional PDF path; defaults to `runtime_tables.pdf` next to the input. |
+| `--timeout-log-dir CSV=ERRORS_DIR` | Use timeout/error logs from another directory; repeatable. |
 
-Usage:
+The PDF has one page per maintenance scenario and shows Baseline, Dewey, and
+PrePost medians plus the corresponding maintenance-cost differences.
 
-```bash
-python scripts/plot_speedups.py (--age <...> | --kuzu <...> | --neo4j <...>) [OPTION]...
-```
+### Combined runtime tables
 
-At least one of `--age`, `--kuzu`, or `--neo4j` must be provided.
-
-| Argument | Required | Description |
-|---|---|---|
-| `--age` | No | AGE result input (file, directory, glob, or `paper`/`latest`) |
-| `--kuzu` | No | Kuzu result input (file, directory, glob, or `paper`/`latest`) |
-| `--neo4j` | No | Neo4j result input (file, directory, glob, or `paper`/`latest`) |
-| `--out-dir` | No | Output directory for generated PDFs (default: `results/combined/<db_tag_pairs>/`) |
-| `--timeout-ms` | No | Timeout threshold in ms used to derive lower speedup bounds for timeout cases (default: `300000`) |
-| `--crop-query-max` | No | Repeatable mapping `QUERY:MAX_Y`, e.g. `01:300` or `01:3e2`, to set the y-axis upper bound for a query |
-| `--legend-query-numbers` | No | `all` (default), `none`, or comma-separated query IDs to control where legends are rendered |
-| `--legend-placement` | No | Legend placement relative to axes: `inside` (default) or `outside` |
-| `--legend-align` | No | Legend horizontal alignment: `left`, `center`, `right`, or numeric (`0..1` / percent `0..100`) |
-| `--legend-columns` | No | Maximum number of legend columns (default: `2`) |
-| `--legend-order` | No | Legend item order mode: `db-suffix` (default), `suffix-db`, or `reverse` |
-| `--baseline-legend-position` | No | Insertion index for baseline in legend (`0`-based, negative values from end) |
-| `--baseline-label-placement` | No | Baseline label mode: `none` (default), `line`, or `legend` |
-| `--label-shift` | No | Repeatable label offset rule in format `QUERY:BAR:DX:DY[:CURV]` |
-
-Meaning of `--legend-order` values:
-
-- `db-suffix` (default): Legend grouped by database first, then suffix (annotation scheme).
-- `suffix-db`: Legend grouped by suffix first, then database.
-- `reverse`: Reverse of the default `db-suffix` order.
-
-Meaning of `--label-shift QUERY:BAR:DX:DY[:CURV]`:
-
-- `QUERY`: Numeric query ID (e.g. `01`, `2`, `11`; internally normalized to integer form).
-- `BAR`: Bar index to move; multiple bars can be grouped with `/` (e.g. `0/1/2`).
-  Grouping is only valid when all selected bars have the same label text (for example all `>10^x` or all `<10^-x`).
-  In grouped mode, these bars are rendered with one shared label position instead of one label per bar.
-- `DX`: Horizontal label shift (float).
-- `DY`: Vertical label shift (float).
-- `CURV` (optional): Integer curvature for an arrow/callout.
-  If `CURV` is provided, an arrow from label to bar is drawn; if omitted, no arrow is drawn.
-  For a straight arrow, use `CURV=0`.
-
-Examples:
-
-- `01:0/1:-9:0` shifts labels of bars `0` and `1` for query `01` by `dx=-9`, `dy=0`.
-- `05:4:-15:0` shifts only bar `4` for query `05`.
-- `02:0/1:0:8:0` same shift as above, but with explicit curvature value.
-
-Reproducing the Paper Results:
+For a combined regular Tree/LDBC overview, provide the six input CSVs and
+choose one or more output variants:
 
 ```bash
-python scripts/plot_speedups.py \
-    --kuzu paper \
-    --neo4j paper \
-    --legend-query-numbers 01 \
-    --legend-placement outside \
-    --legend-align 50 \
-    --legend-columns 5 \
-    --baseline-legend-position 2 \
-    --baseline-label-placement legend \
-    --label-shift 01:0/1:-9:0 \
-    --label-shift 02:0/1:-9:0 \
-    --label-shift 05:0/1:-9:0 \
-    --label-shift 05:2/3:0:0 \
-    --label-shift 05:4:-15:0
+python scripts/create_combined_overview.py \
+  --age paper --kuzu paper --neo4j paper \
+  --age-ldbc paper --kuzu-ldbc paper --neo4j-ldbc paper \
+  --table-output results/combined/paper_results/runtime_table_compact.pdf
 ```
 
-#### Baseline Runtime Comparison for Kuzu and Apache AGE
+Input options:
 
-`scripts/compare_baseline_kuzu_age.py`
+| Option | Description |
+|---|---|
+| `--age CSV\|paper` | Regular AGE Tree runtime CSV; `paper` selects the frozen paper input. |
+| `--kuzu CSV\|paper` | Regular Kuzu Tree runtime CSV. |
+| `--neo4j CSV\|paper` | Regular Neo4j Tree runtime CSV. |
+| `--age-ldbc CSV\|paper` | AGE LDBC runtime CSV. |
+| `--kuzu-ldbc CSV\|paper` | Kuzu LDBC runtime CSV. |
+| `--neo4j-ldbc CSV\|paper` | Neo4j LDBC runtime CSV. |
 
-Compares baseline median runtimes from Kuzu and AGE and writes a joined CSV.
+Output options:
 
-Usage:
+| Option | Description |
+|---|---|
+| `--table-output [PDF]` | Compact overview; optional path. |
+| `--detailed-output [PDF]` | Exact-value overview; optional path. |
+| `--rounded-output [PDF]` | Rounded-value overview; optional path. |
+| `--timeout-log-dir CSV=ERRORS_DIR` | Use timeout/error logs from another directory; repeatable. |
+
+Without an explicit output option, all three overview variants are written to
+a new timestamped directory under `results/combined/`.
+
+The overview selects the requested paper inputs, validates their provenance,
+and writes compact, exact, and rounded PDFs. The lower-level three-system
+table can be generated with:
 
 ```bash
-python scripts/compare_baseline_kuzu_age.py \
-    --kuzu <path|dir|paper|latest> \
-    --age <path|dir|paper|latest> \
-    [--out <output-csv>]
+python scripts/create_combined_runtime_tables.py \
+  --age results/age/<run>/runtimes.csv \
+  --kuzu results/kuzu/<run>/runtimes.csv \
+  --neo4j results/neo4j/<run>/runtimes.csv \
+  --output results/combined/<run>/runtime_tables.pdf
 ```
 
-| Argument | Required | Description |
-|---|---|---|
-| `--kuzu` | Yes | Kuzu CSV, result directory, or shorthand `paper` / `latest` |
-| `--age` | Yes | AGE CSV, result directory, or shorthand `paper` / `latest` |
-| `--out` | No | Explicit output CSV path (default: auto path under `results/combined/`) |
+| Option | Description |
+|---|---|
+| `--age CSV` | Regular AGE Tree runtime CSV. Required. |
+| `--kuzu CSV` | Regular Kuzu Tree runtime CSV. Required. |
+| `--neo4j CSV` | Regular Neo4j Tree runtime CSV. Required. |
+| `--output PDF` | Output PDF; defaults to a timestamped `results/combined/` path. |
+| `--timeout-log-dir CSV=ERRORS_DIR` | Use timeout/error logs from another directory; repeatable. |
 
-Examples:
-
-```bash
-python scripts/compare_baseline_kuzu_age.py --age paper --kuzu latest
-python scripts/compare_baseline_kuzu_age.py --age results/age/20260301_130056 --kuzu results/kuzu/paper_results/analysis
-```
-
-`scripts/view_baseline_kuzu_age.py`
-
-Shows filtered rows from a combined baseline comparison CSV in a table.
-
-Usage:
-
-```bash
-python scripts/view_baseline_kuzu_age.py [--csv <file>] [--query <id|name[,id|name...]>]
-```
-
-| Argument | Required | Description |
-|---|---|---|
-| `--csv` | No | Explicit comparison CSV (default: latest `results/combined/**/baseline_kuzu_age_compare.csv`) |
-| `--query` | No | Query filter by IDs (`01`, `02`, `05`, `11`) or names (`all_descendants`, `all_children`, `all_leaves`, `check_if_ancestor`) |
-
-Examples:
-
-```bash
-python scripts/view_baseline_kuzu_age.py
-python scripts/view_baseline_kuzu_age.py --query 01,11
-python scripts/view_baseline_kuzu_age.py --csv results/combined/age_20260301_130056_kuzu_paper_results/baseline_kuzu_age_compare.csv --query all_children
-```
+Both scripts write `sources.json` provenance next to generated PDFs. Timeout
+logs for copied or merged CSVs can be supplied with the repeatable
+`--timeout-log-dir CSV=ERRORS_DIR` option.
 
 ---
 
