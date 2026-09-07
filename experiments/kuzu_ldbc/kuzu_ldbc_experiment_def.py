@@ -25,7 +25,8 @@ def run_experiment():
         save_plans=os.getenv("SAVE_PLANS", "1") == "1",
         save_results=os.getenv("SAVE_RESULTS", "1") == "1",
         save_queries=os.getenv("SAVE_QUERIES", "1") == "1",
-        report_script=project / "scripts/create_runtime_tables.py")
+        report_script=(project / "scripts/create_runtime_tables.py"
+                       if os.getenv("SAVE_REPORT", "1") == "1" else None))
 
 
 if __name__ == "__main__":

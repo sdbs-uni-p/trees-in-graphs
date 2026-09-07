@@ -58,10 +58,12 @@ def _render_structural_parameters(executor, query_id, method, query):
         token = f"${prefix}{name.title()}"
         replacements[token] = f"'{value}'" if isinstance(value, str) else str(value)
     if query_id == "interactive-short-6":
-        if method == "dewey":
+        # Legacy templates (including Neo4j) still request a precomputed root.
+        # Queries deriving it from message must do that work inside the timer.
+        if method == "dewey" and "$rootDewey" in query:
             root_value = str(rows[0][0]).split(".", 1)[0]
             replacements["$rootDewey"] = f"'{root_value}'"
-        else:
+        elif method == "prepost" and "$rootPre" in query:
             message_pre, message_post = rows[0]
             _, root_rows = executor.execute_query(
                 "MATCH (root:Comment) "

@@ -1,7 +1,9 @@
 -- SPDX-License-Identifier: GPL-3.0-only
 MATCH (:Person {id: 19791209302645})<-[:HAS_CREATOR]-(message)
 WITH message ORDER BY message.creationDate DESC, message.id ASC LIMIT 10
-OPTIONAL MATCH (root:Comment {dewey: string_split(message.dewey, '.')[1]})
+WITH message, string_split(message.dewey, '.')[1] AS rootDewey
+OPTIONAL MATCH (root:Comment {dewey: rootDewey})
+WHERE root.depth = 0
 OPTIONAL MATCH (root)-[:REPLY_OF]->(commentPost:Post)
 OPTIONAL MATCH (message:Post)-[:HAS_CREATOR]->(directPerson:Person)
 OPTIONAL MATCH (commentPost)-[:HAS_CREATOR]->(commentPerson:Person)

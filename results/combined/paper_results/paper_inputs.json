@@ -29,7 +29,7 @@
       "rows": 45,
       "selection": "IC12, IS2, IS6",
       "paper_csv": "results/kuzu_ldbc/paper_results/runtimes.csv",
-      "paper_sha256": "d3765516146991b06cbb477161f56deff18705d2902212779ae62f5576ce10a7"
+      "paper_sha256": "60150a096b4656fa4e4302e04b4b0111630ce1babac8f8054944abe73526c4a2"
     },
     "neo4j_ldbc": {
       "rows": 45,

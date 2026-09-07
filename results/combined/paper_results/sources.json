@@ -2,10 +2,10 @@
   "schema_version": 1,
   "reports": {
     "runtime_table_compact.pdf": {
-      "created_at": "2026-09-07T11:30:56.616535+00:00",
+      "created_at": "2026-09-07T15:50:31.167256+00:00",
       "output": {
         "path": "runtime_table_compact.pdf",
-        "sha256": "22b8842c845ab20406fc4bb5933178968c8994b0c0db6e872438e916d9d3c8e4"
+        "sha256": "3b67119c35b22efbf3da75037bc3a85945be80624be04e85161de22977048479"
       },
       "inputs": {
         "age": {
@@ -39,7 +39,109 @@
         "kuzu_ldbc": {
           "csv": {
             "path": "../../kuzu_ldbc/paper_results/runtimes.csv",
-            "sha256": "d3765516146991b06cbb477161f56deff18705d2902212779ae62f5576ce10a7"
+            "sha256": "60150a096b4656fa4e4302e04b4b0111630ce1babac8f8054944abe73526c4a2"
+          },
+          "timeout_logs": []
+        },
+        "neo4j_ldbc": {
+          "csv": {
+            "path": "../../neo4j_ldbc/paper_results/runtimes.csv",
+            "sha256": "3e0ab33f6f8e2c0dd307fbd46934d7ec05d039b647fb0b72cd57dffec7563177"
+          },
+          "timeout_logs": []
+        }
+      }
+    },
+    "runtime_tables_exact.pdf": {
+      "created_at": "2026-09-07T15:50:31.155147+00:00",
+      "output": {
+        "path": "runtime_tables_exact.pdf",
+        "sha256": "c09072e0f9c813e293f065372176b425d91ab327ec4aedec760c4ad51266e746"
+      },
+      "inputs": {
+        "age": {
+          "csv": {
+            "path": "../../age/paper_results/runtimes.csv",
+            "sha256": "3ceedc66c20b60c024afbc364bd44ad66f8153b75e901292235cd61bfb350292"
+          },
+          "timeout_logs": []
+        },
+        "kuzu": {
+          "csv": {
+            "path": "../../kuzu/paper_results/runtimes.csv",
+            "sha256": "ac82ab466e81ce85e59a811ab81e1c2df4036af884701ead9918e97bc4f2ec59"
+          },
+          "timeout_logs": []
+        },
+        "neo4j": {
+          "csv": {
+            "path": "../../neo4j/paper_results/runtimes.csv",
+            "sha256": "6e270641dd94122ab6df3d04aa913bb279256b46de0f6f6b694349cf77f2f352"
+          },
+          "timeout_logs": []
+        },
+        "age_ldbc": {
+          "csv": {
+            "path": "../../age_ldbc/paper_results/runtimes.csv",
+            "sha256": "77d5199bc782e77026542c877a7825167df06c3dfa4ea12799854d892fe91c31"
+          },
+          "timeout_logs": []
+        },
+        "kuzu_ldbc": {
+          "csv": {
+            "path": "../../kuzu_ldbc/paper_results/runtimes.csv",
+            "sha256": "60150a096b4656fa4e4302e04b4b0111630ce1babac8f8054944abe73526c4a2"
+          },
+          "timeout_logs": []
+        },
+        "neo4j_ldbc": {
+          "csv": {
+            "path": "../../neo4j_ldbc/paper_results/runtimes.csv",
+            "sha256": "3e0ab33f6f8e2c0dd307fbd46934d7ec05d039b647fb0b72cd57dffec7563177"
+          },
+          "timeout_logs": []
+        }
+      }
+    },
+    "runtime_tables_rounded.pdf": {
+      "created_at": "2026-09-07T15:50:31.160410+00:00",
+      "output": {
+        "path": "runtime_tables_rounded.pdf",
+        "sha256": "e142e5a5b04168f3f40eac94c16c49ecc9239b7105eca58cc028f197488137af"
+      },
+      "inputs": {
+        "age": {
+          "csv": {
+            "path": "../../age/paper_results/runtimes.csv",
+            "sha256": "3ceedc66c20b60c024afbc364bd44ad66f8153b75e901292235cd61bfb350292"
+          },
+          "timeout_logs": []
+        },
+        "kuzu": {
+          "csv": {
+            "path": "../../kuzu/paper_results/runtimes.csv",
+            "sha256": "ac82ab466e81ce85e59a811ab81e1c2df4036af884701ead9918e97bc4f2ec59"
+          },
+          "timeout_logs": []
+        },
+        "neo4j": {
+          "csv": {
+            "path": "../../neo4j/paper_results/runtimes.csv",
+            "sha256": "6e270641dd94122ab6df3d04aa913bb279256b46de0f6f6b694349cf77f2f352"
+          },
+          "timeout_logs": []
+        },
+        "age_ldbc": {
+          "csv": {
+            "path": "../../age_ldbc/paper_results/runtimes.csv",
+            "sha256": "77d5199bc782e77026542c877a7825167df06c3dfa4ea12799854d892fe91c31"
+          },
+          "timeout_logs": []
+        },
+        "kuzu_ldbc": {
+          "csv": {
+            "path": "../../kuzu_ldbc/paper_results/runtimes.csv",
+            "sha256": "60150a096b4656fa4e4302e04b4b0111630ce1babac8f8054944abe73526c4a2"
           },
           "timeout_logs": []
         },
