@@ -1,4 +1,9 @@
 # Trees in Graphs: Benchmarking Tree Queries in Property Graphs
+
+$\Large\color{red}\textbf{This repository still reflects the first submission.}$
+
+$\Large\color{red}\textbf{It will be updated by Wednesday, September 16, 2026.}$
+
 This repository contains the full experimental setup for the paper [Seeing the Trees for the Forest: Leveraging Tree-Shaped Substructures in Property Graphs](https://arxiv.org/abs/2603.12476). It includes database-specific query suites, execution scripts, generated reference results, and instructions to reproduce the paper setup.
 
 In addition to raw and aggregated result files, the repository provides visual artifacts. These include speedup heatmaps for [Kuzu](results/kuzu/paper_results/analysis/speedup_heatmap.png) and [Neo4j](results/neo4j/paper_results/analysis/speedup_heatmap.png), as well as cross-system speedup plots for Kuzu and Apache AGE (one plot per query; x-axis abbreviations: `WT 1` = Wide tree (100 nodes), `WT 2` = Wide tree (1,000 nodes), `WT 3` = Wide tree (10,000 nodes), `DT` = Deep tree (10,000 nodes), `TF` = Tiny Forest (40 nodes), `SNB/C` = Comment tree in full LDBC SNB SF1 graph, `SNB/P` = Place tree in full LDBC SNB SF1 graph, `SNB/T` = Tagclass tree in full LDBC SNB SF1 graph):
