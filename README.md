@@ -1,7 +1,9 @@
 # Trees in Graphs: Benchmarking Tree Queries in Property Graphs
 This repository contains the full experimental setup for the paper "Seeing the Trees for the Forest: Leveraging Tree-Shaped Substructures in Property Graphs". It includes database-specific query suites, execution scripts, generated reference results, and instructions to reproduce the paper setup. An older technical report can be found [here](https://arxiv.org/abs/2603.12476).
 
-The speedups of the scenarios discussed in the paper are presented [here](results/combined/paper_results/runtime_tables_rounded.pdf).
+The scenarios discussed in the paper are presented in the combined [rounded](results/combined/paper_results/runtime_table_rounded.pdf), [exact](results/combined/paper_results/runtime_table_exact.pdf), and [compact](results/combined/paper_results/runtime_table_compact.pdf) tables.
+The further results include the additional queries, graphs and parameter cases described [below](#benchmark-scenarios-and-coverage): [rounded](results/combined/further_results/runtime_table_rounded.pdf), [exact](results/combined/further_results/runtime_table_exact.pdf), and [compact](results/combined/further_results/runtime_table_compact.pdf).
+Both packages include frozen CSV inputs; see [reproduction commands](#reproduce-the-paper-and-further-tables).
 
 For a quick start, use the container setup below and then run the experiment/report commands in the documented order.
 
@@ -27,11 +29,13 @@ For a quick start, use the container setup below and then run the experiment/rep
   - [Directory Structure](#directory-structure)
   - [Encoding Schemes](#encoding-schemes)
   - [Query Naming](#query-naming)
+  - [Benchmark scenarios and coverage](#benchmark-scenarios-and-coverage)
   - [Comparing Queries across Systems and Schemes](#comparing-queries-across-systems-and-schemes)
 - [Generating Reports](#generating-reports)
   - [Single-system runtime tables](#single-system-runtime-tables)
   - [Maintenance runtime tables](#maintenance-runtime-tables)
   - [Combined runtime tables](#combined-runtime-tables)
+    - [Reproduce the paper and further tables](#reproduce-the-paper-and-further-tables)
 - [Datasets](#datasets)
   - [Artificial Trees and Forests](#artificial-trees-and-forests)
   - [LDBC Social Network Benchmark](#ldbc-social-network-benchmark)
@@ -261,37 +265,8 @@ Options:
 | `--parameters-file FILE` | Parameter CSV (default: `experiments/query_parameters.csv`). |
 | `-h`, `--help` | Show help. |
 
-The parameter CSV uses the long format `graph,query,scenario,parameter,value`,
-so it has no empty fields: only parameters used by a query appear in its rows.
-A scenario groups the parameters for one execution of a query; every scenario
-is measured independently. Scenarios with identical parameter values for the
-same graph and query are collapsed to one execution; their IDs are combined
-(for example, `q01_q02`). `graph` is the base graph name without the AGE
-encoding suffix (`_baseline`, `_dewey`, or `_prepost`), so one parameter group
-applies to all three representations. The current queries require `rootid`
-(queries 01, 02, and 05) or `id1` and `id2` (query 11).
-
-The fixed parameter scenarios are:
-
-| Scenario | Parameters | Used by |
-|---|---|---|
-| `q01` | Root of the largest tree | Queries 01 and 05 |
-| `q02` | Root of the deepest tree | Queries 01 and 05 |
-| `q03` | Parent of leaves with high degree | Queries 01 and 05 |
-| `q04` | Parent of leaves with low degree | Queries 01 and 05 |
-| `q05` | Node with the highest degree | Query 02 |
-| `q06` | Node with the lowest degree | Query 02 |
-| `q07` | Root and a farthest leaf | Query 11 (`true`, long positive case) |
-| `q08` | Parent and a deep direct child | Query 11 (`true`, short positive case) |
-| `q09` | Shallow siblings; roots of different trees are siblings below an imaginary parent | Query 11 (`false`, short negative case, `shallow_siblings`) |
-| `q10` | Leaves maximizing the sum of their distances to their lowest common ancestor, which may be the imaginary parent | Query 11 (`false`, long negative case, `distant_leaves`) |
-
-For `11_check_if_ancestor`, the relationship is checked in both directions:
-the result is true if either node is an ancestor of the other.
-
-The `q09` and `q10` parameters are selected deterministically from the first
-rows of the corresponding Top-20 reports under
-`results/age/dewey_top20/<graph>_dewey/`.
+The fixed parameters and scenario IDs are shared with Kuzu and Neo4j; see
+[Benchmark scenarios and coverage](#benchmark-scenarios-and-coverage).
 
 Reproducing The Paper Setup:
 
@@ -504,18 +479,22 @@ Tree query files follow the pattern `{NN}_{operation}.sql`, where the numeric
 prefix groups equivalent tree operations across the baseline, Dewey, and
 PrePost implementations:
 
-| ID | Operation |
-|---|---|
-| `01` | `all_descendants` |
-| `02` | `all_children` |
-| `05` | `all_leaves` |
-| `06` | `count_descendants` |
-| `07` | `count_leaves` |
-| `08` | `check_same_subtree` (positive case) |
-| `10` | `all_ancestors` |
-| `11` | `check_if_ancestor` (positive case) |
-| `12` | `check_same_subtree` (negative case) |
-| `14` | `check_if_ancestor` (negative case) |
+| ID | Operation | Report symbol |
+|---|---|---|
+| `01` | `all_descendants` | $Q_{desc}$ |
+| `02` | `all_children` | $Q_{child}$ |
+| `05` | `all_leaves` | $Q_{leaf}$ |
+| `06` | `count_descendants` | — |
+| `07` | `count_leaves` | — |
+| `08` | `check_same_subtree` (positive case) | — |
+| `10` | `all_ancestors` | — |
+| `11` | `check_if_ancestor` | $`Q_{a\&d}`$ |
+| `12` | `check_same_subtree` (negative case) | — |
+| `14` | `check_if_ancestor` (negative case) | — |
+
+The combined reports measure queries `01`, `02`, `05`, and `11` across all
+three systems. Query `11` uses both positive and negative parameter cases;
+the remaining query files are not part of these reports.
 
 Official LDBC query files use names such as `interactive-short-2.sql`,
 `interactive-short-6.sql`, and `interactive-complex-12.sql` rather than the
@@ -529,6 +508,68 @@ Maintenance query files use the scenario IDs `01` to `04`:
 | `02` | Insert the first child under the first root |
 | `03` | Insert the last root |
 | `04` | Insert the first root |
+
+### Benchmark scenarios and coverage
+
+The fixed Tree parameters are stored in
+[`experiments/query_parameters.csv`](experiments/query_parameters.csv), using
+`graph,query,scenario,parameter,value`. Queries `01`, `02`, and `05` take
+`rootid`; query `11` takes `id1` and `id2`. Graph names omit the representation
+suffix, so the same parameters apply to Baseline, Dewey and PrePost in all
+three systems.
+
+| Scenario | Parameters | Used by |
+|---|---|---|
+| `q01` | Root of the largest tree | $Q_{desc}$, $Q_{leaf}$ |
+| `q02` | Root of the deepest tree | $Q_{desc}$, $Q_{leaf}$ |
+| `q03` | High-degree parent of leaves | $Q_{desc}$, $Q_{leaf}$ |
+| `q04` | Low-degree parent of leaves | $Q_{desc}$, $Q_{leaf}$ |
+| `q05` | Highest-degree node | $Q_{child}$ |
+| `q06` | Lowest-degree node | $Q_{child}$ |
+| `q07` | Root and a farthest leaf | $`Q_{a\&d}`$: long positive case |
+| `q08` | Parent and a deep direct child | $`Q_{a\&d}`$: short positive case |
+| `q09` | Shallow siblings | $`Q_{a\&d}`$: short negative case |
+| `q10` | Most distant leaves | $`Q_{a\&d}`$: long negative case |
+
+Identical parameters are measured once, with combined IDs such as `q01_q02`
+or `q03_q04`. Query `11` checks ancestry in both directions. For `q09`/`q10`,
+roots of different trees share an imaginary parent; leaf distance is the sum
+of distances to the lowest common ancestor.
+
+The paper discusses $Q_{desc}$, $`Q_{a\&d}`$ and the LDBC queries IC12, IS2 and
+IS6. The further tables include those measurements unchanged and add
+$Q_{child}$, $Q_{leaf}$, and the additional graph and parameter cases below:
+
+| Query | Paper parameters | Further parameters |
+|---|---|---|
+| $Q_{desc}$ | `q01`, `q04` | `q01`–`q04` |
+| $Q_{child}$ | — | `q05`, `q06` |
+| $Q_{leaf}$ | — | `q01`–`q04` |
+| $`Q_{a\&d}`$ | `q07`, `q08` | `q07`–`q10` |
+| IC12, IS2, IS6 | All three LDBC queries | Same paper measurements |
+
+The benchmark uses our synthetic graphs and graphs derived from the official
+LDBC Social Network Benchmark (SNB). For synthetic graphs, F means forest,
+NT normal tree (`truebase`), DT deep tree (`ultratall`), and WT wide tree
+(`ultrawide`). The number gives the total node count of the graph; `K` means
+1,000 (for example, WT10K is a wide tree with 10,000 nodes).
+
+SNB/C, SNB/P and SNB/T denote the Comment, Place and TagClass trees within the
+full LDBC SNB SF1 graph, respectively. IC12, IS2 and IS6 also run on that full
+graph. See [Datasets](#datasets) for the data sources and preparation.
+
+| Graph family | Paper graphs | Further graphs |
+|---|---|---|
+| Forest (F) | F1K | F40, F1K |
+| Normal tree (NT / `truebase`) | — | NT10, NT100, NT1K, NT10K, NT100K |
+| Deep tree (DT / `ultratall`) | — | DT10, DT100, DT1K, DT10K, DT100K |
+| Wide tree (WT / `ultrawide`) | WT100, WT1K, WT10K, WT100K | WT10, WT100, WT1K, WT10K, WT100K |
+| SNB trees | SNB/C, SNB/P, SNB/T | SNB/C, SNB/P, SNB/T |
+
+After merging identical parameter cases, the paper tables contain 32 Tree rows
+on eight graphs plus three LDBC rows. The further tables contain 240 Tree rows
+on 20 graphs plus the same three LDBC rows. Each row compares Baseline, Dewey
+and PrePost in AGE, Kuzu and Neo4j using the median of five measurements.
 
 ### Comparing Queries across Systems and Schemes
 
@@ -549,9 +590,28 @@ All queries are parameterised (e.g. `$NODE_TYPE`, `$rootID`); the experiment run
 
 ## Generating Reports
 
-All current report commands operate on the timestamped `runtimes.csv` files
-written by the experiment runners. The scripts require Python 3.10 or newer,
-`rsvg-convert`, and `pdfunite`.
+| Script | Purpose |
+|---|---|
+| `create_runtime_tables.py` | One system's Tree or LDBC runtime CSV → one PDF comparing Baseline, Dewey and PrePost. |
+| `create_maintenance_runtime_tables.py` | One maintenance CSV → insertion runtimes and maintenance-cost differences. |
+| `create_combined_runtime_tables.py` | Three systems' CSVs for either Tree or LDBC queries → a cross-system PDF. |
+| `create_combined_overview.py` | Shared entry point for the paper/further tables, combining Tree and LDBC results in exact, rounded and compact variants. |
+| `create_further_runtime_tables.py` | Implements the complete further selection, manifest validation, confirmed timeouts and page layout; called by `create_combined_overview.py --results further`. |
+
+The report scripts accept `runtimes.csv` files from experiment runs and the
+frozen paper/further packages. Run the commands below from the repository root.
+They require Python 3.10+, `rsvg-convert`, `pdfunite`, Fontconfig and DejaVu Serif.
+Keep all five report modules in `scripts/` together; no Python third-party
+packages are required. On Debian/Ubuntu:
+
+```bash
+sudo apt-get install librsvg2-bin poppler-utils fontconfig fonts-dejavu-core
+```
+
+For ordinary runtime CSVs, missing values require matching per-run timeout logs
+(`Query timed out after N ms.` or `Skipped run N: run 1 timed out after T ms.`).
+A blank alone does not imply a timeout. The frozen further preset instead uses
+its explicit, checksum-validated timeout manifest, described below.
 
 ### Single-system runtime tables
 
@@ -594,20 +654,15 @@ PrePost medians plus the corresponding maintenance-cost differences.
 
 ### Combined runtime tables
 
-For a combined regular Tree/LDBC overview, provide the six input CSVs and
-choose one or more output variants:
-
-```bash
-python scripts/create_combined_overview.py \
-  --age paper --kuzu paper --neo4j paper \
-  --age-ldbc paper --kuzu-ldbc paper --neo4j-ldbc paper \
-  --table-output results/combined/paper_results/runtime_table_compact.pdf
-```
+`create_combined_overview.py` combines Tree and LDBC results using the options
+below. For the frozen packages, see
+[Reproduce the paper and further tables](#reproduce-the-paper-and-further-tables).
 
 Input options:
 
 | Option | Description |
 |---|---|
+| `--results paper\|further` | Complete frozen paper/further input package; omit per-system inputs and timeout-log overrides. |
 | `--age CSV\|paper` | Regular AGE Tree runtime CSV; `paper` selects the frozen paper input. |
 | `--kuzu CSV\|paper` | Regular Kuzu Tree runtime CSV. |
 | `--neo4j CSV\|paper` | Regular Neo4j Tree runtime CSV. |
@@ -624,12 +679,12 @@ Output options:
 | `--rounded-output [PDF]` | Rounded-value overview; optional path. |
 | `--timeout-log-dir CSV=ERRORS_DIR` | Use timeout/error logs from another directory; repeatable. |
 
-Without an explicit output option, all three overview variants are written to
-a new timestamped directory under `results/combined/`.
+Without `--results`, omitted input options select the latest timestamped run
+in each experiment family, falling back to its `paper_results/` CSV only when
+no timestamped run exists. Use `--results` or explicit `paper` inputs to
+reproduce frozen results regardless of newer local experiments.
 
-The overview selects the requested paper inputs, validates their provenance,
-and writes compact, exact, and rounded PDFs. The lower-level three-system
-table can be generated with:
+The lower-level three-system table can be generated with:
 
 ```bash
 python scripts/create_combined_runtime_tables.py \
@@ -650,6 +705,54 @@ python scripts/create_combined_runtime_tables.py \
 Both scripts write `sources.json` provenance next to generated PDFs. Timeout
 logs for copied or merged CSVs can be supplied with the repeatable
 `--timeout-log-dir CSV=ERRORS_DIR` option.
+
+#### Reproduce the paper and further tables
+
+Run either command from the repository root:
+
+```bash
+python3 scripts/create_combined_overview.py --results paper
+python3 scripts/create_combined_overview.py --results further
+```
+
+`create_combined_overview.py --results further` calls
+`create_further_runtime_tables.py` internally. Running the latter directly
+without arguments is equivalent.
+
+Each creates `runtime_table_exact.pdf`, `runtime_table_rounded.pdf`,
+`runtime_table_compact.pdf`, and `sources.json` in a new
+`results/combined/<timestamp>/` directory.
+
+To create only one variant, add `--table-output`, `--detailed-output`, or
+`--rounded-output`. An optional path sets the destination and overwrites that
+PDF if it exists, for example:
+
+```bash
+python3 scripts/create_combined_overview.py --results further \
+  --table-output results/combined/further_results/runtime_table_compact.pdf
+```
+
+Use `--results paper` and a path under `paper_results/` to update a paper PDF.
+Multiple output options can be combined. Do not combine `--results` with
+per-system input options or `--timeout-log-dir`.
+
+The commands use only the bundled CSVs: `results/<system>/paper_results/`
+for paper, or `results/combined/further_results/inputs/` for further. No database
+containers or new experiments are needed. Keep the CSVs, JSON manifests,
+`experiments/query_parameters.csv`, and the five report scripts together and
+unchanged. Further input checksums and timeout rows are validated; its inputs
+and manifest are also copied into the output directory; its JSON paths refer
+only to files in that package.
+
+Five AGE Baseline groups in further have confirmed 6 h timeouts. They appear
+as `>6 h`, with lower speedup bounds computed from the timeout limit divided
+by the indexed median and rounded outward. This information is included in
+`inputs.json`; no historical timeout logs are needed for reproduction.
+
+For identical rendering, use the same DejaVu Serif fonts and rendering-tool
+versions. The commands reproduce the published numbers, labels and layout;
+PDF file hashes may differ because of embedded creation times. CSV and JSON
+line endings are fixed to LF by `.gitattributes` to keep input checksums stable.
 
 ---
 

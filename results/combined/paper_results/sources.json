@@ -39,7 +39,7 @@
         "kuzu_ldbc": {
           "csv": {
             "path": "../../kuzu_ldbc/paper_results/runtimes.csv",
-            "sha256": "60150a096b4656fa4e4302e04b4b0111630ce1babac8f8054944abe73526c4a2"
+            "sha256": "0de4cdb79001831194f369fd309526a0860d1beb054ce2f4d54d7bce2306069b"
           },
           "timeout_logs": []
         },
@@ -52,10 +52,10 @@
         }
       }
     },
-    "runtime_tables_exact.pdf": {
+    "runtime_table_exact.pdf": {
       "created_at": "2026-09-07T15:50:31.155147+00:00",
       "output": {
-        "path": "runtime_tables_exact.pdf",
+        "path": "runtime_table_exact.pdf",
         "sha256": "c09072e0f9c813e293f065372176b425d91ab327ec4aedec760c4ad51266e746"
       },
       "inputs": {
@@ -90,7 +90,7 @@
         "kuzu_ldbc": {
           "csv": {
             "path": "../../kuzu_ldbc/paper_results/runtimes.csv",
-            "sha256": "60150a096b4656fa4e4302e04b4b0111630ce1babac8f8054944abe73526c4a2"
+            "sha256": "0de4cdb79001831194f369fd309526a0860d1beb054ce2f4d54d7bce2306069b"
           },
           "timeout_logs": []
         },
@@ -103,10 +103,10 @@
         }
       }
     },
-    "runtime_tables_rounded.pdf": {
+    "runtime_table_rounded.pdf": {
       "created_at": "2026-09-07T15:50:31.160410+00:00",
       "output": {
-        "path": "runtime_tables_rounded.pdf",
+        "path": "runtime_table_rounded.pdf",
         "sha256": "e142e5a5b04168f3f40eac94c16c49ecc9239b7105eca58cc028f197488137af"
       },
       "inputs": {
@@ -141,7 +141,7 @@
         "kuzu_ldbc": {
           "csv": {
             "path": "../../kuzu_ldbc/paper_results/runtimes.csv",
-            "sha256": "60150a096b4656fa4e4302e04b4b0111630ce1babac8f8054944abe73526c4a2"
+            "sha256": "0de4cdb79001831194f369fd309526a0860d1beb054ce2f4d54d7bce2306069b"
           },
           "timeout_logs": []
         },

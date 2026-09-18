@@ -56,9 +56,7 @@ LDBC_QUERY_LABELS = {
 
 
 def compact_graph(graph):
-    if graph == "F1000":
-        return "F1K"
-    if graph.startswith("WT") and graph[2:].isdigit() and graph.endswith("000"):
+    if re.fullmatch(r"(?:F|NT|DT|WT)\d+000", graph):
         return graph[:-3] + "K"
     return graph
 
@@ -214,8 +212,8 @@ INPUT_FOLDERS = {
     "age_ldbc": "age_ldbc", "kuzu_ldbc": "kuzu_ldbc", "neo4j_ldbc": "neo4j_ldbc",
 }
 OUTPUT_NAMES = {
-    "detailed_output": "runtime_tables_exact.pdf",
-    "rounded_output": "runtime_tables_rounded.pdf",
+    "detailed_output": "runtime_table_exact.pdf",
+    "rounded_output": "runtime_table_rounded.pdf",
     "table_output": "runtime_table_compact.pdf",
 }
 
@@ -246,6 +244,10 @@ def latest_input(directory):
 def parse_arguments(argv=None, results_root=None):
     results_root = results_root or Path(__file__).resolve().parents[1] / "results"
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--results", choices=("paper", "further"),
+        help="Reproduce frozen paper (35 rows) or further (243 rows) results; cannot be combined with input overrides.",
+    )
     for name, folder in INPUT_FOLDERS.items():
         parser.add_argument(
             "--" + name.replace("_", "-"), type=Path,
@@ -259,8 +261,13 @@ def parse_arguments(argv=None, results_root=None):
     add_timeout_arguments(parser)
     args = parser.parse_args(argv)
     try:
+        if args.results and (any(getattr(args, name) is not None for name in INPUT_FOLDERS)
+                             or args.timeout_log_dir):
+            raise ValueError("--results selects a complete frozen input set; omit per-system inputs and --timeout-log-dir")
         for name, folder in INPUT_FOLDERS.items():
-            if getattr(args, name) == Path("paper"):
+            if args.results == "further":
+                setattr(args, name, results_root / "combined" / "further_results" / "inputs" / folder / "runtimes.csv")
+            elif args.results == "paper" or getattr(args, name) == Path("paper"):
                 setattr(args, name, results_root / folder / "paper_results" / "runtimes.csv")
             elif getattr(args, name) is None:
                 setattr(args, name, latest_input(results_root / folder))
@@ -280,8 +287,17 @@ def parse_arguments(argv=None, results_root=None):
     return args
 
 
-def main():
-    args = parse_arguments()
+def main(argv=None):
+    args = parse_arguments(argv)
+    if args.results == "further":
+        from create_further_runtime_tables import generate
+        generate(
+            {variant: getattr(args, option) for variant, option in (
+                ("exact", "detailed_output"), ("rounded", "rounded_output"), ("compact", "table_output"),
+            ) if getattr(args, option) is not None},
+            input_directory=args.age.parent.parent.parent,
+        )
+        return
     log_directories = timeout_directories(args.timeout_log_dir)
     for name in INPUT_FOLDERS:
         print(f"{name}: {getattr(args, name)}")

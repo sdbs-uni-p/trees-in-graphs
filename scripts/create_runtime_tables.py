@@ -271,7 +271,7 @@ def graph_label(graph):
     }
     if graph in snb:
         return snb[graph]
-            raise ValueError(f"Unknown graph: {graph}")
+    raise ValueError(f"Unknown graph: {graph}")
 
 
 def graph_sort_key(graph):
@@ -619,7 +619,7 @@ def load_ldbc_rows(path, log_directories=None):
     medians = {}
     for key, runs in values.items():
         if not runs:
-                raise ValueError(f"No runs found for {key}")
+            raise ValueError(f"No runs found for {key}")
         medians[key] = median_runtime(runs, key)
 
     query_order = list(dict.fromkeys(query for query, _ in values))

@@ -15,3 +15,5 @@ Dockerfile text eol=lf
 # Keep published input checksums stable across platforms.
 results/**/paper_results/*.csv text eol=lf
 results/**/paper_results/*.json text eol=lf
+results/combined/further_results/inputs/*/*.csv text eol=lf
+results/combined/further_results/*.json text eol=lf

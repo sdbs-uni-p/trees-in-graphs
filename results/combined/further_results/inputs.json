@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "path_base": "directory containing inputs.json",
+  "selection": "All 240 configured Tree graph/query/scenario combinations and three paper LDBC queries",
+  "precedence": "Paper rows override supplementary measurements; no averaging across source runs",
+  "timeout_override": {
+    "milliseconds": 21600000,
+    "authority": "Explicit user instruction: missing measurements timed out after 6 h",
+    "interpretation": "Censored runtime >6 h; speedup lower bound 21600000 / indexed median",
+    "historical_error_logs_used": false
+  },
+  "parameter_corrections": [
+    {
+      "csv": "inputs/age/runtimes.csv",
+      "graph": "snb_sf1_comment",
+      "queries": [
+        "01_all_descendants",
+        "05_all_leaves"
+      ],
+      "from": "q01_q02",
+      "to": "q01",
+      "status": "Already applied in bundled CSV"
+    }
+  ],
+  "inputs": {
+    "age": {
+      "csv": {
+        "path": "inputs/age/runtimes.csv",
+        "sha256": "61587ae3f61bae0883fbec1273cb1779b9ab722b9cd12c9a10035a4a4894577c"
+      },
+      "rows": 3600,
+      "paper_rows_preserved": 480,
+      "timeout_groups": [
+        {
+          "graph": "artificial_trees_ultratall_100000",
+          "query": "01_all_descendants",
+          "scenario": "q01_q02",
+          "method": "baseline",
+          "timeout_ms": 21600000,
+          "runs": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "graph": "snb_sf1_comment",
+          "query": "05_all_leaves",
+          "scenario": "q01",
+          "method": "baseline",
+          "timeout_ms": 21600000,
+          "runs": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "graph": "snb_sf1_comment",
+          "query": "05_all_leaves",
+          "scenario": "q02",
+          "method": "baseline",
+          "timeout_ms": 21600000,
+          "runs": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "graph": "snb_sf1_comment",
+          "query": "05_all_leaves",
+          "scenario": "q03",
+          "method": "baseline",
+          "timeout_ms": 21600000,
+          "runs": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "graph": "snb_sf1_comment",
+          "query": "05_all_leaves",
+          "scenario": "q04",
+          "method": "baseline",
+          "timeout_ms": 21600000,
+          "runs": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        }
+      ]
+    },
+    "kuzu": {
+      "csv": {
+        "path": "inputs/kuzu/runtimes.csv",
+        "sha256": "0d6baf292700ae8632c9b9fe3868357d3489bd035469f3ea1ff2f87205238278"
+      },
+      "rows": 3600,
+      "paper_rows_preserved": 480,
+      "timeout_groups": []
+    },
+    "neo4j": {
+      "csv": {
+        "path": "inputs/neo4j/runtimes.csv",
+        "sha256": "2abd6ea9793f63eb3671ffd2567eeafc98e40874f222543586f1f4270582f5ec"
+      },
+      "rows": 3600,
+      "paper_rows_preserved": 480,
+      "timeout_groups": []
+    },
+    "age_ldbc": {
+      "csv": {
+        "path": "inputs/age_ldbc/runtimes.csv",
+        "sha256": "77d5199bc782e77026542c877a7825167df06c3dfa4ea12799854d892fe91c31"
+      },
+      "rows": 45,
+      "selection": "All paper rows, byte-identical copy"
+    },
+    "kuzu_ldbc": {
+      "csv": {
+        "path": "inputs/kuzu_ldbc/runtimes.csv",
+        "sha256": "0de4cdb79001831194f369fd309526a0860d1beb054ce2f4d54d7bce2306069b"
+      },
+      "rows": 45,
+      "selection": "All paper rows, byte-identical copy"
+    },
+    "neo4j_ldbc": {
+      "csv": {
+        "path": "inputs/neo4j_ldbc/runtimes.csv",
+        "sha256": "3e0ab33f6f8e2c0dd307fbd46934d7ec05d039b647fb0b72cd57dffec7563177"
+      },
+      "rows": 45,
+      "selection": "All paper rows, byte-identical copy"
+    }
+  }
+}

@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "reports": {
+    "runtime_table_exact.pdf": {
+      "created_at": "2026-09-18T14:15:09.120659+00:00",
+      "output": {
+        "path": "runtime_table_exact.pdf",
+        "sha256": "9d245646d5f81015528e30dc609548dc07707630d1c174b2c0d7d45c8e29231a"
+      },
+      "inputs": {
+        "age": {
+          "csv": {
+            "path": "inputs/age/runtimes.csv",
+            "sha256": "61587ae3f61bae0883fbec1273cb1779b9ab722b9cd12c9a10035a4a4894577c"
+          },
+          "timeout_logs": []
+        },
+        "kuzu": {
+          "csv": {
+            "path": "inputs/kuzu/runtimes.csv",
+            "sha256": "0d6baf292700ae8632c9b9fe3868357d3489bd035469f3ea1ff2f87205238278"
+          },
+          "timeout_logs": []
+        },
+        "neo4j": {
+          "csv": {
+            "path": "inputs/neo4j/runtimes.csv",
+            "sha256": "2abd6ea9793f63eb3671ffd2567eeafc98e40874f222543586f1f4270582f5ec"
+          },
+          "timeout_logs": []
+        },
+        "age_ldbc": {
+          "csv": {
+            "path": "inputs/age_ldbc/runtimes.csv",
+            "sha256": "77d5199bc782e77026542c877a7825167df06c3dfa4ea12799854d892fe91c31"
+          },
+          "timeout_logs": []
+        },
+        "kuzu_ldbc": {
+          "csv": {
+            "path": "inputs/kuzu_ldbc/runtimes.csv",
+            "sha256": "0de4cdb79001831194f369fd309526a0860d1beb054ce2f4d54d7bce2306069b"
+          },
+          "timeout_logs": []
+        },
+        "neo4j_ldbc": {
+          "csv": {
+            "path": "inputs/neo4j_ldbc/runtimes.csv",
+            "sha256": "3e0ab33f6f8e2c0dd307fbd46934d7ec05d039b647fb0b72cd57dffec7563177"
+          },
+          "timeout_logs": []
+        }
+      },
+      "selection_manifest": {
+        "path": "inputs.json",
+        "sha256": "60a805a2bb3e92390c16d53e181deafdfc428c36603851c234fac93c1167198c"
+      },
+      "generator": {
+        "name": "create_further_runtime_tables.py",
+        "sha256": "467d6ff43e44d2556c9dcb468a212e952b7bb662835a279a857a75fae1e8c4ff"
+      },
+      "timeout_policy": "User-confirmed 21600000 ms for all 25 missing AGE measurements; see inputs.json"
+    },
+    "runtime_table_rounded.pdf": {
+      "created_at": "2026-09-18T14:15:09.127061+00:00",
+      "output": {
+        "path": "runtime_table_rounded.pdf",
+        "sha256": "678eda568d95dc4e4d64abae03b781f2a7eb9f45ad7f6bd8de52f377815c4985"
+      },
+      "inputs": {
+        "age": {
+          "csv": {
+            "path": "inputs/age/runtimes.csv",
+            "sha256": "61587ae3f61bae0883fbec1273cb1779b9ab722b9cd12c9a10035a4a4894577c"
+          },
+          "timeout_logs": []
+        },
+        "kuzu": {
+          "csv": {
+            "path": "inputs/kuzu/runtimes.csv",
+            "sha256": "0d6baf292700ae8632c9b9fe3868357d3489bd035469f3ea1ff2f87205238278"
+          },
+          "timeout_logs": []
+        },
+        "neo4j": {
+          "csv": {
+            "path": "inputs/neo4j/runtimes.csv",
+            "sha256": "2abd6ea9793f63eb3671ffd2567eeafc98e40874f222543586f1f4270582f5ec"
+          },
+          "timeout_logs": []
+        },
+        "age_ldbc": {
+          "csv": {
+            "path": "inputs/age_ldbc/runtimes.csv",
+            "sha256": "77d5199bc782e77026542c877a7825167df06c3dfa4ea12799854d892fe91c31"
+          },
+          "timeout_logs": []
+        },
+        "kuzu_ldbc": {
+          "csv": {
+            "path": "inputs/kuzu_ldbc/runtimes.csv",
+            "sha256": "0de4cdb79001831194f369fd309526a0860d1beb054ce2f4d54d7bce2306069b"
+          },
+          "timeout_logs": []
+        },
+        "neo4j_ldbc": {
+          "csv": {
+            "path": "inputs/neo4j_ldbc/runtimes.csv",
+            "sha256": "3e0ab33f6f8e2c0dd307fbd46934d7ec05d039b647fb0b72cd57dffec7563177"
+          },
+          "timeout_logs": []
+        }
+      },
+      "selection_manifest": {
+        "path": "inputs.json",
+        "sha256": "60a805a2bb3e92390c16d53e181deafdfc428c36603851c234fac93c1167198c"
+      },
+      "generator": {
+        "name": "create_further_runtime_tables.py",
+        "sha256": "467d6ff43e44d2556c9dcb468a212e952b7bb662835a279a857a75fae1e8c4ff"
+      },
+      "timeout_policy": "User-confirmed 21600000 ms for all 25 missing AGE measurements; see inputs.json"
+    },
+    "runtime_table_compact.pdf": {
+      "created_at": "2026-09-18T14:15:09.133073+00:00",
+      "output": {
+        "path": "runtime_table_compact.pdf",
+        "sha256": "542772d0697da64e9ef6b872d345683178b14029b3cc1c213e50a393059a51df"
+      },
+      "inputs": {
+        "age": {
+          "csv": {
+            "path": "inputs/age/runtimes.csv",
+            "sha256": "61587ae3f61bae0883fbec1273cb1779b9ab722b9cd12c9a10035a4a4894577c"
+          },
+          "timeout_logs": []
+        },
+        "kuzu": {
+          "csv": {
+            "path": "inputs/kuzu/runtimes.csv",
+            "sha256": "0d6baf292700ae8632c9b9fe3868357d3489bd035469f3ea1ff2f87205238278"
+          },
+          "timeout_logs": []
+        },
+        "neo4j": {
+          "csv": {
+            "path": "inputs/neo4j/runtimes.csv",
+            "sha256": "2abd6ea9793f63eb3671ffd2567eeafc98e40874f222543586f1f4270582f5ec"
+          },
+          "timeout_logs": []
+        },
+        "age_ldbc": {
+          "csv": {
+            "path": "inputs/age_ldbc/runtimes.csv",
+            "sha256": "77d5199bc782e77026542c877a7825167df06c3dfa4ea12799854d892fe91c31"
+          },
+          "timeout_logs": []
+        },
+        "kuzu_ldbc": {
+          "csv": {
+            "path": "inputs/kuzu_ldbc/runtimes.csv",
+            "sha256": "0de4cdb79001831194f369fd309526a0860d1beb054ce2f4d54d7bce2306069b"
+          },
+          "timeout_logs": []
+        },
+        "neo4j_ldbc": {
+          "csv": {
+            "path": "inputs/neo4j_ldbc/runtimes.csv",
+            "sha256": "3e0ab33f6f8e2c0dd307fbd46934d7ec05d039b647fb0b72cd57dffec7563177"
+          },
+          "timeout_logs": []
+        }
+      },
+      "selection_manifest": {
+        "path": "inputs.json",
+        "sha256": "60a805a2bb3e92390c16d53e181deafdfc428c36603851c234fac93c1167198c"
+      },
+      "generator": {
+        "name": "create_further_runtime_tables.py",
+        "sha256": "467d6ff43e44d2556c9dcb468a212e952b7bb662835a279a857a75fae1e8c4ff"
+      },
+      "timeout_policy": "User-confirmed 21600000 ms for all 25 missing AGE measurements; see inputs.json"
+    }
+  },
+  "path_base": "directory containing sources.json"
+}

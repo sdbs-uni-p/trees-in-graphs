@@ -224,6 +224,8 @@ def numeric_speedup(text):
 def svg_label(value):
     indexed = {
         "Q_desc": ("Q", "desc"),
+        "Q_child": ("Q", "child"),
+        "Q_leaf": ("Q", "leaf"),
         "Q_a&d": ("Q", "a&amp;d"),
         "S_D": ("S", "D"),
         "S_P": ("S", "P"),
@@ -242,7 +244,7 @@ def svg_label(value):
 
 def svg_rich_text(value):
     rendered = html.escape(value)
-    for token in ("Q_desc", "Q_a&d", "S_D", "S_P"):
+    for token in ("Q_desc", "Q_child", "Q_leaf", "Q_a&d", "S_D", "S_P"):
         rendered = rendered.replace(html.escape(token), svg_label(token))
     return rendered
 
@@ -288,6 +290,8 @@ def svg_page(
         left, top = 30, 52
         width = max(table_width + 60, 920)
         height = top + total_header + len(rows) * row_height + 130 + (60 if has_timeout else 0)
+        if notes_override is not None:
+            height += max(0, len(notes_override) - 5) * 12
         physical_size = f'width="{width}" height="{height}"'
     else:
         width, height = 1191, 842
@@ -470,7 +474,7 @@ def svg_page(
             f'<text x="{left}" y="{bottom + 17 + index * 12}" '
             f'font-size="7.5">{svg_rich_text(note)}</text>'
         )
-    legend_y = bottom + (max(75, 29 + len(notes) * 12) if has_timeout else 75)
+    legend_y = bottom + (max(75, 29 + len(notes) * 12) if has_timeout or len(notes) > 5 else 75)
     label_width, bar_width, bar_height = 95, 360, 12
     bar_x = left + label_width
     parts.append(
