@@ -95,7 +95,7 @@ def selected_ldbc_rows(system_medians):
 def rounded_runtime(value):
     if value.startswith(">"):
         return value
-    return f"{float(value.replace(',', '')):,.1f}"
+    return rounded_speedup(value + "x").removesuffix("x")
 
 
 def rounded_speedup(value):
@@ -115,7 +115,7 @@ def rounded_speedup(value):
         rendered = f"{number:.0f}"
     elif number < 1000:
         rendered = f"{math.floor(number / 10 + 0.5) * 10:,.0f}"
-    else:
+    elif number < 1_000_000:
         thousands = number / 1000
         if thousands < 10:
             rendered = f"{thousands:.1f}K"
@@ -125,11 +125,21 @@ def rounded_speedup(value):
             rendered = f"{math.floor(thousands / 10 + 0.5) * 10:,.0f}K"
         else:
             rendered = f"{math.floor(thousands / 100 + 0.5) * 100:,.0f}K"
+    else:
+        millions = number / 1_000_000
+        if millions < 10:
+            rendered = f"{millions:.1f}M"
+        elif millions < 100:
+            rendered = f"{millions:.0f}M"
+        elif millions < 1000:
+            rendered = f"{math.floor(millions / 10 + 0.5) * 10:,.0f}M"
+        else:
+            rendered = f"{math.floor(millions / 100 + 0.5) * 100:,.0f}M"
     # Choose the display precision from the rounded value, so crossing a
     # boundary cannot produce both 1.00/1.0, 10.0/10, or 1,000/1.0K.
-    rounded = float(rendered.rstrip("K").replace(",", ""))
-    if rendered.endswith("K"):
-        rounded *= 1000
+    suffix = rendered[-1:] if rendered[-1:] in "KM" else ""
+    rounded = float(rendered.removesuffix(suffix).replace(",", ""))
+    rounded *= {"": 1, "K": 1000, "M": 1_000_000}[suffix]
     if rounded < 1:
         rendered = f"{rounded:.2f}"
     elif rounded < 10:
@@ -138,8 +148,12 @@ def rounded_speedup(value):
         rendered = f"{rounded:,.0f}"
     elif rounded < 10000:
         rendered = f"{rounded / 1000:.1f}K"
-    else:
+    elif rounded < 1_000_000:
         rendered = f"{rounded / 1000:,.0f}K"
+    elif rounded < 10_000_000:
+        rendered = f"{rounded / 1_000_000:.1f}M"
+    else:
+        rendered = f"{rounded / 1_000_000:,.0f}M"
     return f"{rendered}x"
 
 
@@ -165,7 +179,27 @@ def rounded_rows(rows):
 def compact_rows(rows):
     result = []
     for row in rows:
-        compact = list(row[:3])
+        parameter = {
+            "Root": "Root",
+            "Leaf parent": "MLP",
+            "Deep root": "D-r.",
+            "Leaf parent H": "H-LP",
+            "Leaf parent H/L": "H/L",
+            "High degree": "High",
+            "Low degree": "Low",
+            "Siblings": "Sib.",
+            "Distant leaves": "Dist",
+        }.get(row[2])
+        if parameter is None:
+            if row[2].startswith("Root"):
+                parameter = "RL"
+            elif row[2].startswith("Deep parent"):
+                parameter = "DPL"
+            elif len(row[2]) <= 4:
+                parameter = row[2]
+            else:
+                raise ValueError(f"Missing compact parameter label: {row[2]}")
+        compact = [*row[:2], parameter]
         for system in range(3):
             offset = 3 + system * 5
             compact.extend((row[offset], row[offset + 3], row[offset + 4]))
@@ -173,21 +207,26 @@ def compact_rows(rows):
     return result
 
 
-def content_widths(rows, subheadings):
-    headers = ("Graph", "Query", "Parameters") + tuple(subheadings) * 3
+def content_widths(rows, subheadings, leading_headings=("Graph", "Query", "Parameters")):
+    headers = tuple(leading_headings) + tuple(subheadings) * 3
     widths = []
     for column, header in enumerate(headers):
         if column == 0:
             # Graph labels contain comparatively wide uppercase glyphs (notably
             # the trailing K in WT100K), so give that column a little more room.
             character_width, padding, minimum = 5.2, 12, 42
+        elif column == 1 and len(subheadings) == 3:
+            # Compact query suffixes render as smaller subscripts.
+            character_width, padding, minimum = 3.5, 6, 30
+        elif column == 2 and len(subheadings) == 3:
+            character_width, padding, minimum = 4.6, 6, 30
         elif column < 3:
             character_width, padding, minimum = 4.6, 8, 34
         else:
             if len(subheadings) == 5:
                 character_width, padding, minimum = 4.8, 14, 32
             else:
-                character_width, padding, minimum = 4.4, 8, 28
+                character_width, padding, minimum = 4.8, 6, 24
         content_width = len(header) * character_width
         for row in rows:
             value = row[column]
@@ -343,8 +382,8 @@ def main(argv=None):
                 "Parameters: Root = root of largest tree; Leaf parent = parent of a leaf; "
                 "Root–leaf = root-farthest-leaf pair; Deep parent–leaf = deepest "
                 "parent-leaf pair.",
-                "Methods: B = Baseline; D = Dewey; P = PrePost; "
-                "S_D = B / D; S_P = B / P. All times are in ms.",
+                "Methods: M_B = Baseline; M_D = Dewey; M_P = PrePost; "
+                "S_D = M_B / M_D; S_P = M_B / M_P. All times are in ms.",
                 "Graphs: F = forest; WT = ultrawide tree; K = 1,000 nodes; "
                 "SNB/C, SNB/P, SNB/T = SNB SF1 trees; SNB = full SNB SF1 graph.",
             ),
@@ -361,20 +400,27 @@ def main(argv=None):
                 for note in common_options["notes_override"]
             )
         variants = (
-            ("exact", args.detailed_output, exact_rows, ("B (ms)", "D", "P", "S_D", "S_P"), False),
-            ("rounded", args.rounded_output, rounded, ("B (ms)", "D", "P", "S_D", "S_P"), False),
-            ("compact", args.table_output, compact, ("B (ms)", "S_D", "S_P"), True),
+            ("exact", args.detailed_output, exact_rows, ("B", "D", "P", "S_D", "S_P"), False),
+            ("rounded", args.rounded_output, rounded, ("B", "D", "P", "S_D", "S_P"), False),
+            ("compact", args.table_output, compact, ("B", "S_D", "S_P"), True),
         )
         for name, output, rows, subheadings, table_only in variants:
             if output is None:
                 continue
             output.parent.mkdir(parents=True, exist_ok=True)
-            leading_widths, metric_widths = content_widths(rows, subheadings)
+            leading_headings = (
+                ("Graph", "Qu.", "Param.")
+                if table_only else ("Graph", "Query", "Parameters")
+            )
+            leading_widths, metric_widths = content_widths(
+                rows, subheadings, leading_headings
+            )
             render_options = dict(common_options)
+            render_options["leading_headings"] = leading_headings
             if name == "rounded":
                 render_options["notes_override"] = common_options["notes_override"] + (
-                    "Rounding: runtimes use one decimal place; speedups use about two "
-                    "significant digits and K denotes 1,000x.",
+                    "Rounding: runtimes and speedups use about two significant "
+                    "digits; K denotes 1,000 and M denotes 1,000,000.",
                 )
             svg = temp / f"{name}.svg"
             pdf = temp / f"{name}.pdf"

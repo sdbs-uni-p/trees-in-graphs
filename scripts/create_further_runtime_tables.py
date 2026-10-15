@@ -196,13 +196,17 @@ def generate(output_paths, input_directory=OUTPUT):
     with tempfile.TemporaryDirectory(prefix='further-results-') as temporary:
         temp = Path(temporary)
         for variant, rows, headings in (
-            ('exact', exact, ('B (ms)', 'D', 'P', 'S_D', 'S_P')),
-            ('rounded', rounded, ('B (ms)', 'D', 'P', 'S_D', 'S_P')),
-            ('compact', compact_rows(rounded), ('B (ms)', 'S_D', 'S_P')),
+            ('exact', exact, ('B', 'D', 'P', 'S_D', 'S_P')),
+            ('rounded', rounded, ('B', 'D', 'P', 'S_D', 'S_P')),
+            ('compact', compact_rows(rounded), ('B', 'S_D', 'S_P')),
         ):
             if variant not in output_paths:
                 continue
-            leading, metrics = content_widths(rows, headings)
+            leading_headings = (
+                ('Graph', 'Qu.', 'Param.')
+                if variant == 'compact' else ('Graph', 'Query', 'Parameters')
+            )
+            leading, metrics = content_widths(rows, headings, leading_headings)
             # Use the paper's widths; reserve extra space only for the bold
             # bound itself, not for all ordinary values in a timeout column.
             for column in range(len(metrics)):
@@ -219,15 +223,15 @@ def generate(output_paths, input_directory=OUTPUT):
                      if query == 'LDBC' else
                      'Queries: Q_desc = All Descendants; Q_child = All Children; Q_leaf = All Leaves; Q_a&d = Check if Ancestor.'),
                     *PARAMETER_NOTES[query],
-                    'Methods: B = Baseline; D = Dewey; P = PrePost; S_D = B / D; S_P = B / P. Runtimes: median of five runs in ms.',
+                    'Methods: M_B = Baseline; M_D = Dewey; M_P = PrePost; S_D = M_B / M_D; S_P = M_B / M_P. Runtimes: median of five runs in ms.',
                     'Graphs: F = forest; NT = truebase; DT = ultratall; WT = ultrawide; K = 1,000 nodes.',
                     'SNB/C, SNB/P, SNB/T = SNB SF1 trees; SNB = full SNB SF1 graph.',
                 )
                 if variant != 'exact':
-                    notes += ('Rounding: runtimes to one decimal; speedups to about two significant digits; K = 1,000x. Bounds round outward.',)
+                    notes += ('Rounding: runtimes and speedups to about two significant digits; K = 1,000 and M = 1,000,000. Bounds round outward.',)
                 svg = svg_page(
                     titles[query], page_rows,
-                    leading_headings=('Graph', 'Query', 'Parameters'),
+                    leading_headings=leading_headings,
                     leading_widths=leading, metric_widths=metrics, subheadings=headings,
                     graph_notes=False, notes_override=notes,
                     row_height=12.3, header_height=15, subheader_height=14.5, body_font_size=9.1,

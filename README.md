@@ -796,4 +796,4 @@ If you use this artifact, please cite:
 
 ## Acknowledgment
 
-This project/research was partly funded by the Passau International Centre for Advanced Interdisciplinary Studies (PICAIS) of the University of Passau, Germany.
+This research project was partly funded by the Passau International Centre for Advanced Interdisciplinary Studies (PICAIS) of the University of Passau, Germany.

@@ -2,10 +2,10 @@
   "schema_version": 1,
   "reports": {
     "runtime_table_compact.pdf": {
-      "created_at": "2026-09-07T15:50:31.167256+00:00",
+      "created_at": "2026-10-14T14:01:39.033556+00:00",
       "output": {
         "path": "runtime_table_compact.pdf",
-        "sha256": "3b67119c35b22efbf3da75037bc3a85945be80624be04e85161de22977048479"
+        "sha256": "37bcfc623f112b31f4c9e5bc324e5b8cc1bca90db3f8b9297324b0d1c8340e6a"
       },
       "inputs": {
         "age": {
@@ -53,10 +53,10 @@
       }
     },
     "runtime_table_exact.pdf": {
-      "created_at": "2026-09-07T15:50:31.155147+00:00",
+      "created_at": "2026-10-14T14:06:37.687709+00:00",
       "output": {
         "path": "runtime_table_exact.pdf",
-        "sha256": "c09072e0f9c813e293f065372176b425d91ab327ec4aedec760c4ad51266e746"
+        "sha256": "567a16e2cedf3aa33763ab6d00e2d986e350b19bd455b57839c9f4b88e4c6915"
       },
       "inputs": {
         "age": {
@@ -104,10 +104,10 @@
       }
     },
     "runtime_table_rounded.pdf": {
-      "created_at": "2026-09-07T15:50:31.160410+00:00",
+      "created_at": "2026-10-14T14:01:38.803764+00:00",
       "output": {
         "path": "runtime_table_rounded.pdf",
-        "sha256": "e142e5a5b04168f3f40eac94c16c49ecc9239b7105eca58cc028f197488137af"
+        "sha256": "f280b21197fbbff720f30efc74de2483c7d88a8fe5f791ec5d9abb9987a3c208"
       },
       "inputs": {
         "age": {

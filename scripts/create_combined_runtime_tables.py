@@ -215,13 +215,25 @@ def numeric_speedup(text):
     if text == "–":
         return None
     number = text.lstrip("><").rstrip("x").replace(",", "")
-    multiplier = 1000 if number.endswith("K") else 1
+    multiplier = {"K": 1000, "M": 1_000_000}.get(number[-1:], 1)
     if multiplier != 1:
         number = number[:-1]
     return float(number) * multiplier
 
 
 def svg_label(value):
+    plain_math = {
+        "B": "B",
+        "D": "D",
+        "P": "P",
+        "M_B": "B",
+        "M_D": "D",
+        "M_P": "P",
+    }
+    if value in plain_math:
+        return f'<tspan font-style="italic">{plain_math[value]}</tspan>'
+    if value == "B (ms)":
+        return '<tspan font-style="italic">B</tspan> (ms)'
     indexed = {
         "Q_desc": ("Q", "desc"),
         "Q_child": ("Q", "child"),
@@ -233,18 +245,19 @@ def svg_label(value):
     if value not in indexed:
         return html.escape(value)
     symbol, index = indexed[value]
-    symbol_style = ' font-style="italic"' if symbol == "Q" else ""
-    index_style = ' font-style="italic"' if symbol == "Q" else ""
     return (
-        f'<tspan{symbol_style}>{symbol}</tspan>'
-        f'<tspan baseline-shift="sub" font-size="6"{index_style}>'
+        f'<tspan font-style="italic">{symbol}</tspan>'
+        f'<tspan baseline-shift="sub" font-size="6" font-style="italic">'
         f"{index}</tspan>"
     )
 
 
 def svg_rich_text(value):
     rendered = html.escape(value)
-    for token in ("Q_desc", "Q_child", "Q_leaf", "Q_a&d", "S_D", "S_P"):
+    for token in (
+        "Q_desc", "Q_child", "Q_leaf", "Q_a&d", "S_D", "S_P",
+        "M_B", "M_D", "M_P",
+    ):
         rendered = rendered.replace(html.escape(token), svg_label(token))
     return rendered
 
@@ -317,8 +330,8 @@ def svg_page(
     for index, heading in enumerate(leading_headings):
         center = (xs[index] + xs[index + 1]) / 2
         parts.append(
-            f'<text x="{center}" y="{top + total_header / 2}" text-anchor="middle" '
-            f'dominant-baseline="middle" font-size="8.2">{heading}</text>'
+            f'<text x="{center}" y="{top + total_header / 2}" dy="2" text-anchor="middle" '
+            f'dominant-baseline="central" font-size="8.2">{heading}</text>'
         )
     if subheadings is None:
         subheadings = (
@@ -334,8 +347,8 @@ def svg_page(
         group_left = xs[start_column]
         group_right = xs[start_column + metrics_per_system]
         parts.append(
-            f'<text x="{(group_left + group_right) / 2}" y="{top + header_height / 2}" '
-            f'text-anchor="middle" dominant-baseline="middle" font-size="9" '
+            f'<text x="{(group_left + group_right) / 2}" y="{top + header_height / 2}" dy="2" '
+            f'text-anchor="middle" dominant-baseline="central" font-size="9" '
             f'font-weight="bold">{system}</text>'
         )
         parts.append(
@@ -346,8 +359,8 @@ def svg_page(
             column = start_column + offset
             parts.append(
                 f'<text x="{(xs[column] + xs[column + 1]) / 2}" '
-                f'y="{top + header_height + subheader_height / 2}" text-anchor="middle" '
-                f'dominant-baseline="middle" font-size="7.7">{svg_label(heading)}</text>'
+                f'y="{top + header_height + subheader_height / 2}" dy="2" text-anchor="middle" '
+                f'dominant-baseline="central" font-size="7.7">{svg_label(heading)}</text>'
             )
     speedup_offsets = {
         offset
@@ -380,8 +393,8 @@ def svg_page(
             center_y = y + row_height / 2
             weight = "bold" if value.startswith((">", "<")) else "normal"
             if numeric:
-                # Tabular digits retain column alignment while rendering Kx
-                # and x as normal text, avoiding collisions between glyphs.
+                # Tabular digits retain column alignment while rendering Kx,
+                # Mx, and x as normal text, avoiding collisions between glyphs.
                 numeric_font_size = body_font_size
                 plain_number = value.lstrip(">").replace(",", "")
                 try:
@@ -397,9 +410,11 @@ def svg_page(
                     ratio = numeric_speedup(value)
                     if ratio is not None and ratio >= 100_000:
                         numeric_font_size = body_font_size - 1.1
+                if table_only and value in {"110K", "190K"}:
+                    numeric_font_size = body_font_size - 0.4
                 parts.append(
-                    f'<text x="{xs[column + 1] - 3}" y="{center_y}" text-anchor="end" '
-                    f'dominant-baseline="middle" font-size="{numeric_font_size}" '
+                    f'<text x="{xs[column + 1] - 3}" y="{center_y}" dy="2" text-anchor="end" '
+                    f'dominant-baseline="central" font-size="{numeric_font_size}" '
                     f'font-weight="{weight}" fill="{foreground}" '
                     f'font-variant-numeric="tabular-nums">{html.escape(value)}</text>'
                 )
@@ -410,8 +425,8 @@ def svg_page(
                     else body_font_size
                 )
                 parts.append(
-                    f'<text x="{xs[column] + 3}" y="{center_y}" text-anchor="start" '
-                    f'dominant-baseline="middle" font-size="{text_font_size}" font-weight="{weight}" '
+                    f'<text x="{xs[column] + 3}" y="{center_y}" dy="2" text-anchor="start" '
+                    f'dominant-baseline="central" font-size="{text_font_size}" font-weight="{weight}" '
                     f'fill="{foreground}">{svg_label(value)}</text>'
                 )
         if previous_graph is not None and row[0] != previous_graph:
